@@ -28,6 +28,7 @@ class HelpCog(commands.Cog):
             name="전적 검색",
             value=(
                 "`ㅇ전적 [닉네임]` - 전적 검색\n"
+                "`ㅇ랭크 [닉네임]` - 랭크 정보 검색\n"
                 "`ㅇ최근게임 [닉네임]` - 마지막 게임 전적 검색\n"
             ),
             inline=False
@@ -38,6 +39,7 @@ class HelpCog(commands.Cog):
             value=(
                 "`ㅇ도움` - 도움말 표시\n"
                 "`ㅇㅈㅈ` - 전적\n"
+                "`ㅇㄹㅋ` - 랭크\n"
                 "`ㅇㅊㄱㄱ` - 최근겜\n"
             ),
             inline=False
