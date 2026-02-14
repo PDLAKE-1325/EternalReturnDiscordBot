@@ -157,10 +157,10 @@ class RecordCog(commands.Cog):
                     name="💡 사용법",
                     value=(
                         "**직접 검색:**\n"
-                        "`!전적 [닉네임]` 또는 `!ㅈㅈ [닉네임]`\n\n"
+                        "`ㅇ전적 [닉네임]` 또는 `ㅇㅈㅈ [닉네임]`\n\n"
                         "**닉네임 등록 후 자동 검색:**\n"
-                        "`!닉네임등록 [닉네임]` 으로 등록하면\n"
-                        "`!전적` 만 입력해도 자동으로 검색됩니다!"
+                        "`ㅇ등록 [닉네임]` 으로 등록하면\n"
+                        "`ㅇ전적` 만 입력해도 자동으로 검색됩니다!"
                     ),
                     inline=False
                 )
@@ -345,7 +345,7 @@ class RecordCog(commands.Cog):
                 )
                 embed.add_field(
                     name="사용법",
-                    value="`!최근게임 [닉네임]` 또는\n`!닉네임등록 [닉네임]` 후 `!최근게임`",
+                    value="`ㅇ최근게임 [닉네임]` 또는\n`ㅇ등록 [닉네임]` 후 `ㅇ최근게임`",
                     inline=False
                 )
                 await ctx.reply(embed=embed)

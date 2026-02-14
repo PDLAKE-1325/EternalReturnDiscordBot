@@ -24,4 +24,4 @@ def init_db():
     # models를 임포트해야 Base.metadata가 테이블 정보를 알 수 있음
     import models
     Base.metadata.create_all(bind=engine)
-    print("✅ 데이터베이스 테이블 생성 완료 (users, er_accounts)")
+    print("- 데이터베이스 테이블 생성 완료 (users, er_accounts)")
