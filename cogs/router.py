@@ -24,7 +24,7 @@ class MessageRouter(commands.Cog):
         if message.channel.id in CHAT_CHANNEL_ID:
             ai_cog = self.bot.get_cog("AIChat")  # ← 중요
             if not ai_cog:
-                print("AIChat cog 없음")
+                #print("AIChat cog 없음")
                 return
 
             # await ai_cog.ask_ai(message, message.content)

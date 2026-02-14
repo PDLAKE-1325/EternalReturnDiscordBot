@@ -93,9 +93,9 @@ class AIChat(commands.Cog):
         channel_context = self._build_channel_context(channel_id, user_name)
         user_context = self._build_user_context(user_id)
         
-        print("🟡 호출 판정 필요")
-        print(f"📢 채널 전체 맥락:\n{channel_context}")
-        print(f"유저 {user_name}과의 대화:\n{user_context}")
+        #print("🟡 호출 판정 필요")
+        #print(f"📢 채널 전체 맥락:\n{channel_context}")
+        #print(f"유저 {user_name}과의 대화:\n{user_context}")
         
         # 최근 봇이 이 유저에게 응답했는지 확인
         user_history = self.user_chat_history.get(user_id, [])
@@ -269,7 +269,7 @@ class AIChat(commands.Cog):
                 contents=prompt
             )
             result = response.text.strip()
-            print(f"🔵 AI 판정 결과:\n{result}")
+            #print(f"🔵 AI 판정 결과:\n{result}")
             
             # 응답 파싱
             lines = result.split('\n')
@@ -298,11 +298,11 @@ class AIChat(commands.Cog):
                 elif line.startswith('REASON:'):
                     reason = line.split(':', 1)[1].strip()
             
-            print(f"✅ 파싱 - 호출: {called}, 카테고리 키: {category_keys}, 확인메시지: '{confirm_msg}', 이유: {reason}")
+            #print(f"✅ 파싱 - 호출: {called}, 카테고리 키: {category_keys}, 확인메시지: '{confirm_msg}', 이유: {reason}")
             return (called, category_keys, confirm_msg, reason)
             
         except Exception as e:
-            print(f"⚠️ 호출 판정 실패: {e}")
+            #print(f"⚠️ 호출 판정 실패: {e}")
             traceback.print_exc()
             return (recent_bot_replied, [], "")
 
@@ -313,7 +313,7 @@ class AIChat(commands.Cog):
         category_keys가 비어있으면 빈 문자열 반환
         """
         if not category_keys:
-            print("📚 지식 없이 대화만")
+            #print("📚 지식 없이 대화만")
             return ""
         
         knowledge_parts = []
@@ -326,18 +326,20 @@ class AIChat(commands.Cog):
                 if content:
                     knowledge_parts.append(f"[{key}]\n{content}")
                     matched_keys.append(key)
-                    print(f"  ✅ 로드 성공: {key}")
+                    #print(f"  ✅ 로드 성공: {key}")
             else:
-                print(f"  ⚠️ 키 없음: {key}")
+                pass
+                #print(f"  ⚠️ 키 없음: {key}")
         
         if not knowledge_parts:
-            print(f"⚠️ 매칭 실패! 요청된 키: {category_keys}")
-            print("📋 사용 가능한 DB 키:")
+            #print(f"⚠️ 매칭 실패! 요청된 키: {category_keys}")
+            #print("📋 사용 가능한 DB 키:")
             for key in list(self.er_db.keys())[:5]:
-                print(f"  - {key}")
+                pass
+                #print(f"  - {key}")
         
         result = "\n\n".join(knowledge_parts)
-        print(f"📚 최종 로드: {len(knowledge_parts)}개 카테고리 ({', '.join(matched_keys)})")
+        #print(f"📚 최종 로드: {len(knowledge_parts)}개 카테고리 ({', '.join(matched_keys)})")
         return result
 
     async def ask_ai(self, message: discord.Message, user_message: str) -> str:
@@ -350,7 +352,7 @@ class AIChat(commands.Cog):
         user_name = message.author.display_name
         channel_id = message.channel.id
         
-        print(f"🟡 질문 받음 - {user_name}: {user_message}")
+        #print(f"🟡 질문 받음 - {user_name}: {user_message}")
 
         # 채널 대화 기록에 추가
         channel_history = self.channel_history.setdefault(channel_id, [])
@@ -364,11 +366,11 @@ class AIChat(commands.Cog):
         is_called, category_labels, confirm_msg, reason_context = await self.ai_is_called(
             user_message, user_name, channel_id, user_id
         )
-        print(f"🔵 최종 호출 판정: {is_called}, 확인메시지: '{confirm_msg}', 필요 지식: {category_labels}")
+        #print(f"🔵 최종 호출 판정: {is_called}, 확인메시지: '{confirm_msg}', 필요 지식: {category_labels}")
 
         # 확인 메시지가 있으면 (애매한 경우) 확인 후 종료
         if confirm_msg:
-            print(f"⚠️ 애매한 상황 - 확인 요청: {confirm_msg}")
+            #print(f"⚠️ 애매한 상황 - 확인 요청: {confirm_msg}")
             await message.reply(confirm_msg, mention_author=False)
             # 대화 기록에 추가 (원래 질문 + 확인 메시지 모두 저장)
             user_history = self.user_chat_history.setdefault(user_id, [])
@@ -380,7 +382,7 @@ class AIChat(commands.Cog):
             return ""
 
         if not is_called:
-            print("⚪️ 호출 아님")
+            #print("⚪️ 호출 아님")
             return ""
         
         # 🔔 응답 중 메시지 + 취소 버튼 (확실한 경우에만)
@@ -410,10 +412,10 @@ class AIChat(commands.Cog):
         if category_labels:
             knowledge = await self.load_knowledge(category_labels)
             knowledge_prompt = f"이터널 리턴 정보:\n{knowledge}\n\n"
-            print(f"📚 지식 사용: {category_labels}")
+            #print(f"📚 지식 사용: {category_labels}")
         else:
             knowledge_prompt = ""
-            print("💬 DB 없이 대화 맥락으로만 답변")
+            #print("💬 DB 없이 대화 맥락으로만 답변")
 
         prompt = (
             f"{knowledge_prompt}\n\n"
@@ -467,7 +469,7 @@ class AIChat(commands.Cog):
         )
 
         try:
-            print("🟠 Gemini 호출 시작")
+            #print("🟠 Gemini 호출 시작")
 
             # AI 응답 생성 (취소 버튼 체크와 함께)
             response_task = asyncio.create_task(
@@ -481,7 +483,7 @@ class AIChat(commands.Cog):
             # 주기적으로 취소 여부 확인
             while not response_task.done():
                 if cancel_view.cancelled:
-                    print("❌ 사용자가 응답을 취소했습니다")
+                    #print("❌ 사용자가 응답을 취소했습니다")
                     response_task.cancel()
                     return ""
                 await asyncio.sleep(0.5)
@@ -490,14 +492,14 @@ class AIChat(commands.Cog):
             
             # 취소되었으면 응답하지 않음
             if cancel_view.cancelled:
-                print("❌ 응답 생성 완료했지만 취소됨")
+                #print("❌ 응답 생성 완료했지만 취소됨")
                 return ""
 
-            print("🟢 Gemini 응답 수신")
+            #print("🟢 Gemini 응답 수신")
 
             text = response.text.strip() if response.text else ""
 
-            print("✅ 최종 응답:", text if text else "응답 없음")
+            #print("✅ 최종 응답:", text if text else "응답 없음")
             
             # 🔁 대화 기록 저장 (유저별)
             user_history = self.user_chat_history.setdefault(user_id, [])
@@ -514,10 +516,10 @@ class AIChat(commands.Cog):
             return text if text else "몰라"
 
         except asyncio.CancelledError:
-            print("❌ 응답 생성이 취소되었습니다")
+            #print("❌ 응답 생성이 취소되었습니다")
             return ""
         except Exception:
-            print("🔴 Gemini 호출 에러 발생")
+            #print("🔴 Gemini 호출 에러 발생")
             traceback.print_exc()
             
             # 에러 시 상태 메시지 업데이트
