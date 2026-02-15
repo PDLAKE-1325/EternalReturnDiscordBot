@@ -41,7 +41,7 @@ class AIChat(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.client = genai.Client(api_key=AI_KEY)
-        self.model = "models/gemini-2.5-flash"
+        self.model = "models/gemini-3-flash-preview"
         
         # ER DB를 딕셔너리로 저장 (JSON 파싱 필요)
         self.er_db_raw = get_ER_Database()

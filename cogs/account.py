@@ -79,7 +79,7 @@ class ERAccountCog(commands.Cog):
 
         except Exception as e:
             session.rollback()
-            print(f"[ERROR] 닉네임 등록 중 오류: {e}")
+            #print(f"[ERROR] 닉네임 등록 중 오류: {e}")
             await ctx.reply(f"등록 중 오류가 발생했습니다: {e}")
         finally:
             session.close()
@@ -123,7 +123,7 @@ class ERAccountCog(commands.Cog):
 
         except Exception as e:
             session.rollback()
-            print(f"[ERROR] 닉네임 삭제 중 오류: {e}")
+            #print(f"[ERROR] 닉네임 삭제 중 오류: {e}")
             await ctx.reply(f"삭제 중 오류가 발생했습니다: {e}")
         finally:
             session.close()
