@@ -94,7 +94,7 @@ class AIChat(commands.Cog):
         user_context = self._build_user_context(user_id)
         
         #print("🟡 호출 판정 필요")
-        #print(f"📢 채널 전체 맥락:\n{channel_context}")
+        print(f"📢 채널 전체 맥락:\n{channel_context}")
         #print(f"유저 {user_name}과의 대화:\n{user_context}")
         
         # 최근 봇이 이 유저에게 응답했는지 확인
@@ -154,10 +154,7 @@ class AIChat(commands.Cog):
             "【5순위】 게임 관련이지만 애매함\n"
             "- 게임 용어 있지만 봇 언급 없음 → UNCERTAIN\n\n"
             
-            "【6순위】 디스코드 맨션\n"
-            "- 직접적으로 @이리와 로 맨션한 경우가 아니라면 NO\n\n"
-
-            "【7순위】 그 외\n"
+            "【6순위】 그 외\n"
             "- 모든 나머지 경우 → NO\n\n"
             
             "중요: 다른 유저들끼리 대화하는 것과 봇에게 말하는 것을 명확히 구분해야 함!\n"
