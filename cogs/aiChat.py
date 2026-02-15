@@ -94,7 +94,7 @@ class AIChat(commands.Cog):
         user_context = self._build_user_context(user_id)
         
         #print("🟡 호출 판정 필요")
-        print(f"📢 채널 전체 맥락:\n{channel_context}")
+        # print(f"📢 채널 전체 맥락:\n{channel_context}")
         #print(f"유저 {user_name}과의 대화:\n{user_context}")
         
         # 최근 봇이 이 유저에게 응답했는지 확인
@@ -320,7 +320,7 @@ class AIChat(commands.Cog):
         user_name = message.author.display_name
         channel_id = message.channel.id
         
-        #print(f"🟡 질문 받음 - {user_name}: {user_message}")
+        print(f"🟡 질문 받음 - {user_name}: {user_message}")
 
         # 채널 대화 기록에 추가
         channel_history = self.channel_history.setdefault(channel_id, [])
