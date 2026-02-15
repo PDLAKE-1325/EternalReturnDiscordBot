@@ -73,7 +73,7 @@ class RecordCog(commands.Cog):
         MatchingTeamMode = {1: "론울프", 3: "스쿼드", 4: "코발트 프로토콜", 2: "2",5: "5",6: "6",7: "7",8: "8",9: "9"}
         mtm = MatchingTeamMode.get(matching_team_mode, "스쿼드")
 
-        MatchingMode = {1:"1", 2: "일반", 3: "랭크", 4: "일반", 5:"5", 6:"6", 7:"7", 8:"8", 9: "9"} # 6: 코발트 4인큐일떄 뜸
+        MatchingMode = {1:"1", 2: "일반", 3: "랭크", 4: "일반", 5:"5", 6:"", 7:"7", 8:"8", 9: "9"} # 6: 코발트 4인큐일떄 뜸
         mm = MatchingMode.get(matching_mode, "기타")
         
         return f"{mtm} {mm}매치" 
