@@ -25,9 +25,9 @@ def _call_gemini(client, model: str, prompt: str) -> str:
     response = client.models.generate_content(
         model=model,
         contents=prompt,
-        # config=types.GenerateContentConfig(
-        #     tools=[types.Tool(google_search=types.GoogleSearch())]
-        # )
+        config=types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())]
+        )
     )
     parts = response.candidates[0].content.parts
     return "".join(p.text for p in parts if hasattr(p, "text") and p.text).strip()
@@ -181,8 +181,9 @@ class AIChat(commands.Cog):
             4. 불확실성 처리: 확실한 최신 수치가 검색되지 않는다면, 과거 데이터를 추측해서 답하지 말고 "최신 패치에서 변경되었을 가능성이 있으니 공식 패치 노트를 확인해달라"고 정직하게 말해.
 
             5. 이터널 리턴 정보는 현재 {now}(KST) 시즌 {CUR_SEASON}.\n"
+            
+            6. 캐릭터 스킬(Q,W,E,R)과 무기 스킬(D)을 엄격히 구분해라.
 
-            6. 데이터 검색 우선순위(내림차순) : 공식 페이지 - 이터널 리턴 나무위키나 팬덤 사이트 - 여기까지 오면 "모름"
             """
             "[대답 형식]\n"
             "- 2~3문장 이내, 핵심만\n"
