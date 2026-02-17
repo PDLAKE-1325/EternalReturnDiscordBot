@@ -44,7 +44,7 @@ def build_main_embed(bot_user) -> discord.Embed:
     for name, data in PAGES.items():
         embed.add_field(
             name=f"{data['emoji']}  {name}",
-            value="\n".join(f"`{cmd}`" for cmd, _ in data["commands"]),
+            value="\n".join(f"`{cmd}`" for cmd, _, __ in data["commands"]),
             inline=False,
         )
     embed.set_footer(
