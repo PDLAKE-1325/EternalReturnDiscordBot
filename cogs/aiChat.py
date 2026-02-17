@@ -30,7 +30,7 @@ def _parse_response(raw: str) -> tuple[str, str, str]:
     ANSWER는 여러 줄일 수 있으므로 ANSWER: 이후 전부 수집.
     Returns: (status, confirm_msg, answer)
     """
-    status, confirm_msg = "NO", ""
+    status = "NO"
     answer_lines: list[str] = []
     in_answer = False
 
@@ -41,13 +41,13 @@ def _parse_response(raw: str) -> tuple[str, str, str]:
         s = line.strip()
         if s.startswith("CALLED:"):
             status = s.split(":", 1)[1].strip().upper()
-        elif s.startswith("CONFIRM_MSG:"):
-            confirm_msg = s.split(":", 1)[1].strip()
+        # elif s.startswith("CONFIRM_MSG:"):
+        #     confirm_msg = s.split(":", 1)[1].strip()
         elif s.startswith("ANSWER:"):
             answer_lines.append(s.split(":", 1)[1].strip())
             in_answer = True
 
-    return status, confirm_msg, "\n".join(answer_lines).strip()
+    return status, "\n".join(answer_lines).strip()
 
 class AIChat(commands.Cog):
     def __init__(self, bot):
@@ -127,9 +127,9 @@ class AIChat(commands.Cog):
 
         channel_ctx = self._channel_context(channel_id)
         user_ctx    = self._user_context(user_id)
-        last_bot    = self._last_bot_msg(user_id)
-        bot_asked   = any(kw in last_bot for kw in ["나한테", "물어본거", "말하는거", "부른거", "알려줄까"])
-        recent_replied = bool(last_bot)
+        # last_bot    = self._last_bot_msg(user_id)
+        # bot_asked   = any(kw in last_bot for kw in ["나한테", "물어본거", "말하는거", "부른거", "알려줄까"])
+        # recent_replied = bool(last_bot)
 
         now = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -164,10 +164,10 @@ class AIChat(commands.Cog):
             "- 줄바꿈 최대 1번\n"
             "- 목차식 설명 금지\n\n"
 
-            # "━━━ 출력 형식 (이 형식만, 다른 말 붙이지 말 것) ━━━\n"
-            # "CALLED: YES 또는 NO 또는 UNCERTAIN\n"
+            "━━━ 출력 형식 (이 형식만, 다른 말 붙이지 말 것) ━━━\n"
+            "CALLED: YES 또는 NO 또는 UNCERTAIN\n"
             # "CONFIRM_MSG: (UNCERTAIN일 때만. 다양하게: '나한테 물어본거?', '내가 알려줄까?' 등)\n"
-            # "ANSWER: (YES일 때만 최종 답변)\n"
+            "ANSWER: (YES일 때만 최종 답변)\n"
         )
 
         raw = await asyncio.to_thread(_call_gemini, self.client, self.model, prompt)
@@ -200,7 +200,7 @@ class AIChat(commands.Cog):
         # 봇 멘션이면 AI 판정 없이 바로 응답 생성
         if bot_mentioned:
             try:
-                _, _, answer = await self._process(message, f"[봇 멘션] {clean_message}")
+                _, answer = await self._process(message, f"[봇 멘션] {clean_message}")
             except Exception:
                 print("🔴 _process 에러:")
                 traceback.print_exc()
@@ -215,7 +215,7 @@ class AIChat(commands.Cog):
 
         # 일반 메시지 → AI 판정
         try:
-            status, confirm_msg, answer = await self._process(message, clean_message)
+            status, answer = await self._process(message, clean_message)
         except Exception:
             print("🔴 _process 에러:")
             traceback.print_exc()
@@ -223,12 +223,12 @@ class AIChat(commands.Cog):
 
         print(f"🔵 판정={status!r}  확인={confirm_msg!r}  답변={answer[:40]!r}")
 
-        if status == "UNCERTAIN" and confirm_msg:
-            await message.reply(confirm_msg, mention_author=False)
-            self._add_user(user_id, "user", clean_message)
-            self._add_user(user_id, "bot", confirm_msg)
-            self._add_channel(channel_id, "이리와", confirm_msg)
-            return ""
+        # if status == "UNCERTAIN" and confirm_msg:
+        #     await message.reply(confirm_msg, mention_author=False)
+        #     self._add_user(user_id, "user", clean_message)
+        #     self._add_user(user_id, "bot", confirm_msg)
+        #     self._add_channel(channel_id, "이리와", confirm_msg)
+        #     return ""
 
         if status != "YES":
             print("⚪ 호출 아님")
