@@ -149,7 +149,8 @@ class AIChat(commands.Cog):
             f"3. 봇 확인 질문: {'있음' if bot_asked else '없음'} / 최근 봇 응답: {'있음' if recent_replied else '없음'}\n"
             "   확인 질문 후 긍정 답변 → YES / 명확한 후속 질문 → YES\n"
             "4. 봇 언급 없지만 봇을 부르는 것일 확률 개높음 → UNCERTAIN\n"
-            "5. 나머지 → NO\n\n"
+            f"5.'{user_message}': 이 문장이 [봇 멘션]으로 시작 → YES"
+            "6. 나머지 → NO\n\n"
 
             f"=== 채널 전체 대화 ===\n{channel_ctx}"
             f"{user_name}: {user_message}\n\n"
