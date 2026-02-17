@@ -312,7 +312,10 @@ class RecordCog(commands.Cog):
             embed.set_footer(text="이리와 봇 - 전적")
             
             # 가장 많이 플레이한 캐릭터 이미지 설정
-            img_path = self.get_character_image_path(most_played_char)[most_played_skin]
+            # img_path = self.get_character_image_path(most_played_char)[most_played_skin]
+            img_paths = self.get_character_image_path(most_played_char)
+            img_path = img_paths[most_played_skin] if most_played_skin < len(img_paths) else (img_paths[0] if img_paths else None)
+
 
             if img_path:
                 file = File(img_path, filename=os.path.basename(img_path))
@@ -499,7 +502,10 @@ class RecordCog(commands.Cog):
             embed.set_footer(text=f"이리와 봇 - 최근 게임 | 게임 ID: {game['gameId']}")
             
             # 플레이한 캐릭터 이미지 설정
-            img_path = self.get_character_image_path(game["characterNum"])[game["skinCode"]%100]
+            # img_path = self.get_character_image_path(game["characterNum"])[game["skinCode"]%100]
+            img_paths = self.get_character_image_path(game["characterNum"])
+            skin_idx = game["skinCode"] % 100
+            img_path = img_paths[skin_idx] if skin_idx < len(img_paths) else (img_paths[0] if img_paths else None)
             if img_path:
                 file = File(img_path, filename=os.path.basename(img_path))
                 embed.set_thumbnail(url=f"attachment://{file.filename}")
