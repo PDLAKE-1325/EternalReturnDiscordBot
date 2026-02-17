@@ -45,7 +45,6 @@ async def load_cogs():
         "cogs.userRank",
         "cogs.router",
         "cogs.aiChat",
-        "cogs.character",
     ]
 
     for ext in extensions:
