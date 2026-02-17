@@ -3,11 +3,11 @@ from discord.ext import commands
 from config import AI_KEY
 from data import CURRENT_SEASON as CUR_SEASON
 from zoneinfo import ZoneInfo
+from datetime import datetime
 
 import traceback
 import discord
 import asyncio
-import datetime
 import re
 
 
