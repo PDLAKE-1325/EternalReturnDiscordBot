@@ -1,7 +1,6 @@
 import asyncio
 import discord
 from discord.ext import commands
-from data import ER_Database
 
 # DB 임포트
 from db import init_db
