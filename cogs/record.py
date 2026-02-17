@@ -315,7 +315,7 @@ class RecordCog(commands.Cog):
             # img_path = self.get_character_image_path(most_played_char)[most_played_skin]
             img_paths = self.get_character_image_path(most_played_char)
             img_path = img_paths[most_played_skin] if most_played_skin < len(img_paths) else (img_paths[0] if img_paths else None)
-
+            print(f"most_played_char:{most_played_char}, most_played_skin : {most_played_skin}")
 
             if img_path:
                 file = File(img_path, filename=os.path.basename(img_path))
@@ -506,6 +506,7 @@ class RecordCog(commands.Cog):
             img_paths = self.get_character_image_path(game["characterNum"])
             skin_idx = game["skinCode"] % 100
             img_path = img_paths[skin_idx] if skin_idx < len(img_paths) else (img_paths[0] if img_paths else None)
+            print(f"skincode: {game["skinCode"]}")
             if img_path:
                 file = File(img_path, filename=os.path.basename(img_path))
                 embed.set_thumbnail(url=f"attachment://{file.filename}")
