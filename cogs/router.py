@@ -30,7 +30,7 @@ class MessageRouter(commands.Cog):
             if not reply.strip():
                 return  # 빈 응답이면 아무것도 안 함
 
-            await message.channel.send(reply)
+            await message.channel.reply(reply)
             return
 
 
