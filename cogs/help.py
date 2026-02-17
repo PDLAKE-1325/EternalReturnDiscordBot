@@ -4,93 +4,126 @@ from discord.ext import commands
 from datetime import datetime
 
 
-PAGES = [
-    {
-        "title": "📋  유저 등록",
+PAGES = {
+    "유저 등록": {
+        "emoji": "📋",
         "color": 0x0fb9b1,
         "commands": [
             ("ㅇ등록 [닉네임]", "닉네임을 봇에 등록합니다. 이후 명령어에서 닉네임 생략 가능"),
             ("ㅇ삭제",          "등록된 닉네임을 삭제합니다"),
         ],
     },
-    {
-        "title": "🎮  전적 검색",
+    "전적 검색": {
+        "emoji": "🎮",
         "color": 0x5865F2,
         "commands": [
-            ("ㅇ전적 [닉네임]",    "전체 전적 정보 조회  ·  단축: ㅇㅈㅈ"),
-            ("ㅇ랭크 [닉네임]",    "랭크 티어 / LP 조회  ·  단축: ㅇㄹㅋ"),
+            ("ㅇ전적 [닉네임]",     "전체 전적 정보 조회  ·  단축: ㅇㅈㅈ"),
+            ("ㅇ랭크 [닉네임]",     "랭크 티어 / LP 조회  ·  단축: ㅇㄹㅋ"),
             ("ㅇ최근게임 [닉네임]", "마지막 게임 전적 조회  ·  단축: ㅇㅊㄱㄱ"),
         ],
     },
-    {
-        "title": "⚙️  기타",
+    "기타": {
+        "emoji": "⚙️",
         "color": 0xEB459E,
         "commands": [
             ("ㅇ도움 / ㅇㄷㅇ", "이 도움말을 표시합니다"),
         ],
     },
-]
+}
 
 
-def build_embed(page_idx: int, total: int, bot_user) -> discord.Embed:
-    page = PAGES[page_idx]
+# ── 임베드 빌더 ───────────────────────────────────────────────
 
-    lines = "\n\n".join(
-        f"`{cmd}`\n{desc}" for cmd, desc in page["commands"]
-    )
-
+def build_main_embed(bot_user) -> discord.Embed:
     embed = discord.Embed(
-        title=page["title"],
-        description=lines,
-        color=page["color"],
+        title="이리와 봇 도움말",
+        description="아래 버튼을 눌러 카테고리별 명령어를 확인하세요.",
+        color=0x0fb9b1,
         timestamp=datetime.now(),
     )
+    for name, data in PAGES.items():
+        embed.add_field(
+            name=f"{data['emoji']}  {name}",
+            value="  /  ".join(f"`{cmd}`" for cmd, _ in data["commands"]),
+            inline=False,
+        )
     embed.set_footer(
-        text=f"이리와 봇  ·  {page_idx + 1} / {total}",
+        text="이리와 봇  ·  명령어 접두사: ㅇ",
         icon_url=bot_user.display_avatar.url if bot_user else None,
     )
     return embed
 
 
-class HelpView(discord.ui.View):
-    def __init__(self, bot_user, start: int = 0):
+def build_detail_embed(category: str, bot_user) -> discord.Embed:
+    data = PAGES[category]
+    lines = "\n\n".join(
+        f"`{cmd}`\n{desc}" for cmd, desc in data["commands"]
+    )
+    embed = discord.Embed(
+        title=f"{data['emoji']}  {category}",
+        description=lines,
+        color=data["color"],
+        timestamp=datetime.now(),
+    )
+    embed.set_footer(
+        text="이리와 봇  ·  ◀ 버튼으로 메인으로 돌아가기",
+        icon_url=bot_user.display_avatar.url if bot_user else None,
+    )
+    return embed
+
+
+# ── 뷰 ───────────────────────────────────────────────────────
+
+class MainView(discord.ui.View):
+    """메인 화면: 카테고리 버튼 나열"""
+
+    def __init__(self, bot_user):
         super().__init__(timeout=120)
         self.bot_user = bot_user
-        self.page = start
-        self.total = len(PAGES)
-        self._sync_buttons()
 
-    def _sync_buttons(self):
-        self.prev_btn.disabled = self.page == 0
-        self.next_btn.disabled = self.page == self.total - 1
-        self.page_indicator.label = PAGES[self.page]["title"].split("  ", 1)[-1]
-
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
-    async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.page -= 1
-        self._sync_buttons()
-        await interaction.response.edit_message(
-            embed=build_embed(self.page, self.total, self.bot_user),
-            view=self,
-        )
-
-    @discord.ui.button(label="—", style=discord.ButtonStyle.primary, disabled=True)
-    async def page_indicator(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer()
-
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
-    async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.page += 1
-        self._sync_buttons()
-        await interaction.response.edit_message(
-            embed=build_embed(self.page, self.total, self.bot_user),
-            view=self,
-        )
+        for name, data in PAGES.items():
+            self.add_item(CategoryButton(label=name, emoji=data["emoji"], bot_user=bot_user))
 
     async def on_timeout(self):
         for item in self.children:
             item.disabled = True
 
+
+class CategoryButton(discord.ui.Button):
+    def __init__(self, label: str, emoji: str, bot_user):
+        super().__init__(
+            label=label,
+            emoji=emoji,
+            style=discord.ButtonStyle.primary,
+        )
+        self.bot_user = bot_user
+
+    async def callback(self, interaction: discord.Interaction):
+        embed = build_detail_embed(self.label, self.bot_user)
+        view = DetailView(category=self.label, bot_user=self.bot_user)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class DetailView(discord.ui.View):
+    """상세 화면: 뒤로가기 버튼만 표시"""
+
+    def __init__(self, category: str, bot_user):
+        super().__init__(timeout=120)
+        self.category = category
+        self.bot_user = bot_user
+
+    @discord.ui.button(label="뒤로가기", emoji="◀", style=discord.ButtonStyle.secondary)
+    async def back_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = build_main_embed(self.bot_user)
+        view = MainView(self.bot_user)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+
+
+# ── Cog ──────────────────────────────────────────────────────
 
 class HelpCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -98,8 +131,8 @@ class HelpCog(commands.Cog):
 
     @commands.command(name="도움", aliases=["ㄷㅇ"])
     async def record_help(self, ctx: commands.Context):
-        view = HelpView(self.bot.user, start=0)
-        embed = build_embed(0, len(PAGES), self.bot.user)
+        embed = build_main_embed(self.bot.user)
+        view = MainView(self.bot.user)
         msg = await ctx.reply(embed=embed, view=view)
 
         await view.wait()
