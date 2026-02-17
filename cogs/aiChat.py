@@ -25,9 +25,9 @@ def _call_gemini(client, model: str, prompt: str) -> str:
     response = client.models.generate_content(
         model=model,
         contents=prompt,
-        config=types.GenerateContentConfig(
-            tools=[types.Tool(google_search=types.GoogleSearch())]
-        )
+        # config=types.GenerateContentConfig(
+        #     tools=[types.Tool(google_search=types.GoogleSearch())]
+        # )
     )
     parts = response.candidates[0].content.parts
     return "".join(p.text for p in parts if hasattr(p, "text") and p.text).strip()
@@ -182,7 +182,7 @@ class AIChat(commands.Cog):
 
             5. 이터널 리턴 정보는 현재 {now}(KST) 시즌 {CUR_SEASON}.\n"
 
-            6. 데이터 검색 우선순위(내림차순) : 공식 페이지 - https://namu.wiki/w/%EC%B9%B4%ED%8B%B0%EC%95%BC#s-4.5 - 여기까지 오면 "모름"
+            6. 데이터 검색 우선순위(내림차순) : 공식 페이지 - 이터널 리턴 나무위키나 팬덤 사이트 - 여기까지 오면 "모름"
             """
             "[대답 형식]\n"
             "- 2~3문장 이내, 핵심만\n"
