@@ -9,24 +9,24 @@ PAGES = {
         "emoji": "📋",
         "color": 0x0fb9b1,
         "commands": [
-            ("ㅇ등록 [닉네임]", "닉네임을 봇에 등록합니다. 이후 명령어에서 닉네임 생략 가능"),
-            ("ㅇ삭제",          "등록된 닉네임을 삭제합니다"),
+            ("ㅇ등록 [닉네임]", "닉네임을 봇에 등록합니다. 이후 명령어에서 [닉네임] 생략 가능", ""),
+            ("ㅇ삭제",          "등록된 닉네임을 삭제합니다", ""),
         ],
     },
     "전적 검색": {
         "emoji": "🎮",
         "color": 0x5865F2,
         "commands": [
-            ("ㅇ전적 [닉네임]",     "전체 전적 정보 조회  ·  단축: ㅇㅈㅈ"),
-            ("ㅇ랭크 [닉네임]",     "랭크 티어 / LP 조회  ·  단축: ㅇㄹㅋ"),
-            ("ㅇ최근게임 [닉네임]", "마지막 게임 전적 조회  ·  단축: ㅇㅊㄱㄱ"),
+            ("ㅇ전적 [닉네임]",     "전체 전적 정보 조회", "\n> 단축: ㅇㅈㅈ"),
+            ("ㅇ랭크 [닉네임]",     "랭크 게임 정보 조회", "\n> 단축: ㅇㄹㅋ"),
+            ("ㅇ최근게임 [닉네임]", "마지막 게임 전적 조회", "\n> 단축: ㅇㅊㄱㄱ"),
         ],
     },
     "기타": {
         "emoji": "⚙️",
         "color": 0xEB459E,
         "commands": [
-            ("ㅇ도움 / ㅇㄷㅇ", "이 도움말을 표시합니다"),
+            ("ㅇ도움", "이 도움말을 표시합니다", "\n> 단축: ㅇㄷㅇ"),
         ],
     },
 }
@@ -37,18 +37,18 @@ PAGES = {
 def build_main_embed(bot_user) -> discord.Embed:
     embed = discord.Embed(
         title="이리와 봇 도움말",
-        description="아래 버튼을 눌러 카테고리별 명령어를 확인하세요.",
-        color=0x0fb9b1,
+        description="아래 버튼을 눌러 카테고리별 명령어 상세 정보를 확인하세요.",
+        color=0xff4700,
         timestamp=datetime.now(),
     )
     for name, data in PAGES.items():
         embed.add_field(
             name=f"{data['emoji']}  {name}",
-            value="  /  ".join(f"`{cmd}`" for cmd, _ in data["commands"]),
+            value="\n".join(f"`{cmd}`" for cmd, _ in data["commands"]),
             inline=False,
         )
     embed.set_footer(
-        text="이리와 봇  ·  명령어 접두사: ㅇ",
+        text="이리와 봇 · 도움말",
         icon_url=bot_user.display_avatar.url if bot_user else None,
     )
     return embed
@@ -56,8 +56,8 @@ def build_main_embed(bot_user) -> discord.Embed:
 
 def build_detail_embed(category: str, bot_user) -> discord.Embed:
     data = PAGES[category]
-    lines = "\n\n".join(
-        f"`{cmd}`\n{desc}" for cmd, desc in data["commands"]
+    lines = "\n".join(
+        f"`{cmd}`\n> {desc}{short}" for cmd, desc, short in data["commands"]
     )
     embed = discord.Embed(
         title=f"{data['emoji']}  {category}",
@@ -66,7 +66,7 @@ def build_detail_embed(category: str, bot_user) -> discord.Embed:
         timestamp=datetime.now(),
     )
     embed.set_footer(
-        text="이리와 봇  ·  ◀ 버튼으로 메인으로 돌아가기",
+        text=f"이리와 봇 · {category}",
         icon_url=bot_user.display_avatar.url if bot_user else None,
     )
     return embed

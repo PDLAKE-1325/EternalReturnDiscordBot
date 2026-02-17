@@ -137,7 +137,7 @@ class RecordCog(commands.Cog):
         """무기 번호를 이름으로 변환"""
         return self.weapon_names.get(weapon_num, f"무기{weapon_num}")
 
-    @commands.command(name="전적", aliases=["ㅈㅈ","ww"])
+    @commands.command(name="전적", aliases=["ㅈㅈ"])
     async def check_record(self, ctx: commands.Context, *, nickname: str = None):
         """이터널 리턴 최근 전적 검색"""
         user_id = str(ctx.author.id)
@@ -331,7 +331,7 @@ class RecordCog(commands.Cog):
             )
             await loading_msg.edit(content=None, embed=embed)
 
-    @commands.command(name="최근게임", aliases=["ㅊㄱㄱ","crr"])
+    @commands.command(name="최근게임", aliases=["ㅊㄱㄱ"])
     async def recent_game(self, ctx: commands.Context, *, nickname: str = None):
         """가장 최근 게임 상세 정보"""
         user_id = str(ctx.author.id)
