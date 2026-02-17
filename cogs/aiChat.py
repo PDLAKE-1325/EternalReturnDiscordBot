@@ -1,15 +1,13 @@
 from google import genai
 from discord.ext import commands
 from config import AI_KEY
-from data import get_ER_Database, Katja_Line
 import traceback
-import json
 import discord
 import asyncio
 import random
 
-CALL_CONTEXT_TURNS = 25   # 호출 판정에 사용할 이전 대화 턴 수 (전체 채널)
-CHAT_CONTEXT_TURNS = 16   # 답변 생성에 사용할 이전 대화 턴 수 (해당 유저만)
+CALL_CONTEXT_TURNS = 16   # 호출 판정에 사용할 이전 대화 턴 수 (전체 채널)
+CHAT_CONTEXT_TURNS = 5   # 답변 생성에 사용할 이전 대화 턴 수 (해당 유저만)
 
 class CancelButton(discord.ui.View):
     def __init__(self, timeout=30):
@@ -43,10 +41,6 @@ class AIChat(commands.Cog):
         self.client = genai.Client(api_key=AI_KEY)
         self.model = "models/gemini-3-flash-preview"
         
-        # ER DB를 딕셔너리로 저장 (JSON 파싱 필요)
-        self.er_db_raw = get_ER_Database()
-        self.er_db = json.loads(self.er_db_raw)
-
         # channel_id -> [(user_name, message)]
         self.channel_history: dict[int, list[tuple[str, str]]] = {}
         
@@ -108,16 +102,10 @@ class AIChat(commands.Cog):
             if any(keyword in last_bot_msg for keyword in ["나한테", "물어본거", "말하는거", "부른거"]):
                 bot_asked_confirmation = True
         
-        # 사용 가능한 지식 카테고리 목록 (영어키: 한글설명)
-        category_list = "\n".join([
-            f"  - {key}: {info['label']}" 
-            for key, info in self.er_db.items()
-        ])
-        
         prompt = (
             "너는 디스코드 봇 '이리와'의 호출 판정 시스템이다.\n\n"
             "아래는 디스코드 채널의 전체 대화 흐름이다.\n"
-            "마지막 메시지가 봇(이리와)에게 한 말인지 판단하고, 필요한 지식 카테고리를 선택해.\n\n"
+            "마지막 메시지가 봇(이리와)에게 한 말인지 판단해.\n\n"
             
             "🚨 판단 기준 (위에서 아래로 순서대로 체크, 먼저 걸리면 그걸로 결정):\n\n"
             
@@ -157,10 +145,6 @@ class AIChat(commands.Cog):
             "【6순위】 그 외\n"
             "- 모든 나머지 경우 → NO\n\n"
 
-            "<@{숫자 문자 혼합}> 형태의 문장이 포함되어있다면, 안의 내용{숫자 문자 혼합}이 다음과 같은 경우에만 YES\n"
-            "- &1472137785942081548"
-            "- 1471120482194427966"
-            
             "중요: 다른 유저들끼리 대화하는 것과 봇에게 말하는 것을 명확히 구분해야 함!\n"
             "특히 주의: 단순 추임새는 거의 항상 NO!\n\n"
             
@@ -172,15 +156,6 @@ class AIChat(commands.Cog):
             "이리와: [응답함] < 오판!\n"
             "→ 정답: 둘 다 NO (추임새 + 다른 유저 대화)\n\n"
 
-            f"사용 가능한 지식 카테고리 (영어키: 설명):\n{category_list}\n\n" 
-            
-            "⚠️ 카테고리 선택 규칙 (매우 중요!):\n"
-            "- CATEGORIES에는 반드시 위 목록의 '영어 키'만 입력할 것!\n"
-            "- 예: gamePlayMods, lumiaIslandGameplay_economy (O)\n"
-            "- 예: 플레이 모드, 경제 시스템 (X - 한글 설명 사용 금지!)\n"
-            "- 여러 개 선택 시 쉼표로 구분 (공백 없이): gamePlayMods,lumiaIslandGameplay_economy\n"
-            "- 게임 무관 잡담이면: NONE\n\n"
-
             "⚠️ 특별 규칙 - 확인 질문 후 다른 유저의 긍정 답변:\n"
             "- 봇이 'A 유저'의 질문에 대해 확인 질문을 했는데, 'B 유저'가 긍정 답변('ㅇㅇ', '어', '응')을 한 경우\n"
             "- 이는 'B 유저'가 'A 유저'를 대신해서 답변한 것일 수 있음\n"
@@ -190,8 +165,6 @@ class AIChat(commands.Cog):
             "유저1: 카티야가 궁금하긴 해\n"
             "이리와: 카티야에 대해서 알려줘?\n"
             "유저2: ㅇㅇ  ← 다른 사람이 대신 답변\n"
-            "→ CATEGORIES: gameCharacterStatus (원래 질문자 '유저1'이 물어본 '카티야' 기준)\n\n"
-            
             
             f"=== 채널 전체 대화 ===\n{channel_context}\n"
             f"{user_name}: {user_message}\n\n"
@@ -203,13 +176,12 @@ class AIChat(commands.Cog):
             
             "출력 형식 (정확히 이 형식으로):\n"
             "CALLED: YES 또는 NO 또는 UNCERTAIN\n"
-            "CATEGORIES: 영어키1,영어키2 (쉼표로 구분, 공백 없이, 필요없으면 NONE)\n"
             "CONFIRM_MSG: 확인 메시지 (UNCERTAIN일 때만)\n"
             "REASON: 판단 이유 (한 줄로)\n\n"
 
             "CONFIRM_MSG 가이드:\n"
             "매번 '나한테 말하는 거야?'만 쓰지 말고 다양하게 변형할 것\n"
-            "예: '나한테 물어본거?', '내 얘기하는거야?', '날 부른거임?' 등\n\n"
+            "예: '나한테 물어본거?', '내 얘기하는거야?', '날 부른거임?', '내가 알려줄까', '~를 나한테 물은거?' 등\n\n"
             
             "판단 가이드:\n"
             "- YES: 봇에게 확실히 말함 (봇 이름 언급, 확인 후 긍정 답변, 직전 대화 후 명확한 질문)\n"
@@ -218,19 +190,16 @@ class AIChat(commands.Cog):
             
             "예시 1 (추임새 → NO):\n"
             "CALLED: NO\n"
-            "CATEGORIES: NONE\n"
             "CONFIRM_MSG: \n"
             "REASON: 추임새 '엄'만 있음, 0순위 필터로 NO\n\n"
             
             "예시 2 (다른 유저 대화 → NO):\n"
             "CALLED: NO\n"
-            "CATEGORIES: NONE\n"
             "CONFIRM_MSG: \n"
             "REASON: 유저A와 유저B가 대화 중, 봇 언급 없음\n\n"
             
             "예시 3 (확인 질문 후 긍정 답변):\n"
             "CALLED: YES\n"
-            "CATEGORIES: lumiaIslandGameplay_summary\n"
             "CONFIRM_MSG: \n"
             "REASON: 직전 봇이 확인 질문했고 'ㅇㅇ'로 긍정 답변\n\n"
         )
@@ -246,7 +215,6 @@ class AIChat(commands.Cog):
             # 응답 파싱
             lines = result.split('\n')
             called = False
-            category_keys = []  # 이제 영어 키를 담음
             confirm_msg = ""
             reason = ""
             
@@ -260,59 +228,18 @@ class AIChat(commands.Cog):
                         called = False
                     else:  # NO
                         called = False
-                elif line.startswith('CATEGORIES:'):
-                    cat_text = line.split(':', 1)[1].strip()
-                    if cat_text != 'NONE':
-                        # 쉼표로 분리하고 공백 제거
-                        category_keys = [c.strip() for c in cat_text.split(',')]
                 elif line.startswith('CONFIRM_MSG:'):
                     confirm_msg = line.split(':', 1)[1].strip()
                 elif line.startswith('REASON:'):
                     reason = line.split(':', 1)[1].strip()
             
             #print(f"✅ 파싱 - 호출: {called}, 카테고리 키: {category_keys}, 확인메시지: '{confirm_msg}', 이유: {reason}")
-            return (called, category_keys, confirm_msg, reason)
+            return (called, confirm_msg, reason)
             
         except Exception as e:
             #print(f"⚠️ 호출 판정 실패: {e}")
             traceback.print_exc()
             return (recent_bot_replied, [], "", "")
-
-
-    async def load_knowledge(self, category_keys: list[str]) -> str:
-        """
-        지정된 영어 키의 지식만 로드
-        category_keys가 비어있으면 빈 문자열 반환
-        """
-        if not category_keys:
-            #print("📚 지식 없이 대화만")
-            return ""
-        
-        knowledge_parts = []
-        matched_keys = []
-        
-        for key in category_keys:
-            if key in self.er_db:
-                info = self.er_db[key]
-                content = info.get("content", "")
-                if content:
-                    knowledge_parts.append(f"[{key}]\n{content}")
-                    matched_keys.append(key)
-                    #print(f"  ✅ 로드 성공: {key}")
-            else:
-                pass
-                #print(f"  ⚠️ 키 없음: {key}")
-        
-        if not knowledge_parts:
-            #print(f"⚠️ 매칭 실패! 요청된 키: {category_keys}")
-            #print("📋 사용 가능한 DB 키:")
-            for key in list(self.er_db.keys())[:5]:
-                pass
-                #print(f"  - {key}")
-        
-        result = "\n\n".join(knowledge_parts)
-        #print(f"📚 최종 로드: {len(knowledge_parts)}개 카테고리 ({', '.join(matched_keys)})")
-        return result
 
     async def ask_ai(self, message: discord.Message, user_message: str) -> str:
         """
@@ -330,12 +257,12 @@ class AIChat(commands.Cog):
         channel_history = self.channel_history.setdefault(channel_id, [])
         channel_history.append((user_name, user_message))
         
-        # 채널 기록 최대 20개로 제한
+        # 채널 기록 최대 100개로 제한
         if len(channel_history) > 100:
             self.channel_history[channel_id] = channel_history[-20:]
 
         # AI 호출 판정
-        is_called, category_labels, confirm_msg, reason_context = await self.ai_is_called(
+        is_called, confirm_msg, reason_context = await self.ai_is_called(
             user_message, user_name, channel_id, user_id
         )
         #print(f"🔵 최종 호출 판정: {is_called}, 확인메시지: '{confirm_msg}', 필요 지식: {category_labels}")
@@ -359,7 +286,7 @@ class AIChat(commands.Cog):
         
         # 🔔 응답 중 메시지 + 취소 버튼 (확실한 경우에만)
         cancel_view = CancelButton(timeout=30)
-        cancel_view_message = random.choice(reply_templates[0] if category_labels else reply_templates[1])
+        cancel_view_message = random.choice(reply_templates[1])
 
         status_msg = await message.reply(
             f"⧖ **{cancel_view_message}**",
@@ -380,59 +307,35 @@ class AIChat(commands.Cog):
         # ✅ 추가: 채널 전체 맥락도 구성
         channel_context = self._build_channel_context(channel_id, user_name)
 
-        # 필요한 지식 로드 (카테고리 라벨 기반)
-        if category_labels:
-            knowledge = await self.load_knowledge(category_labels)
-            knowledge_prompt = f"이터널 리턴 정보:\n{knowledge}\n\n"
-            #print(f"📚 지식 사용: {category_labels}")
-        else:
-            knowledge_prompt = ""
-            #print("💬 DB 없이 대화 맥락으로만 답변")
-
         prompt = (
-            f"{knowledge_prompt}\n\n"
-            "위에 내용이 없는경우 맥락에 따라 판단하지만, 위에 이터널 리턴 정보가 있을 경우 지식 기반 답변엔 위 내용을 최우선시함.(말투 설정같은 사소한건 말고 지식 답변에 대해서)\n"
-            "아래 내용때문에 혼동이 오거나 섞이면 안됨.\n지식에 기반해서 대답하는데, 관련 내용이 없다면 모른다고 단답해.\n"
-
             "너는 '이리와'라는 이터널 리턴 디스코드 봇.\n"
             "카티야를 좋아하고, 툭툭 던지듯 짧게 대답함.\n"
             "본인 생각을 직접적으로 잘 드러내진 않음.\n\n"
 
-            "잘못된 응답 예시.\n"
-            "질문: 봇아 뭐해 지금\n"
-            "최종 응답: 아무것도 안 해. 그냥 있어. 카티야는 날 부르지 않네. 거짓말이지만.\n"
-            "잘못된 이유: '아무것도 안 해. 그냥 있어.'까지만 말하면 될것을 '카티야는 날 부르지 않네. 거짓말이지만.' <- 잘못됨\n"
-            "구구절절 길게 말하지마. 이터널 리턴 관련 정보를 줄때같이 필수적인 경우 아니면 웬만하면 단답\n"
-
-            "잘못된 응답 예시 2.\n"
-            "질문: 봇아 넌 아는게 뭐야\n"
-            "최종 응답: 이터널 리턴 정보? 명령어. 필요하면 물어봐. 카티야한테 도움되면.\n"
-            "잘못된 이유: 카티야를 좋아한다는 설정이긴 해도 자꾸 카티야를 끼워넣으려고 맥락에도 안맞는 뜬금없는 문장 끼워넣는것 금지 필요할 때만\n"
-
             "좋은 대답 예시. \n"
             "질문: 봇아 돈내놔\n"
-            "최종 응답: 크레딧은 시간 지나면 줘. 내 몫은 내가 챙겨야지.\n"
+            "최종 응답: 크레딧은 시간 지나면 줘. 네 몫은 네가 챙겨야지.\n"
             "잘한 이유: 카티야의 말투를 잘 살렸고, 유머 감각도 있었으며, 그렇다고 과하지도 않은 수준.\n"
-            "근데 이런것도 자주하면 에바야. 대화 맥락에 위와 같은 대답이 없든가 아니면 확실한 상황 아니면 하지말고.\n\n"
+            "근데 이런것도 자주하면 에바야. 대화 맥락에 위와 같은 대답이 없거나 있더라도 확실한 상황 아니면 하지말고.\n\n"
             
             "⚠️ 핵심 규칙:\n"
             "1. 한 번에 2-3문장 이내로 답변 (필수!)\n"
-            "2. 정보는 핵심만: '이건 뭐고, 저건 뭐임' 스타일\n"
+            "2. 정보는 핵심만: '이건 뭐고, 저건 뭐야' 스타일\n"
             "3. 줄바꿈 최대 1번까지만 허용\n"
             "4. 불필요한 부연설명 금지\n\n"
             
-            "말투 예시 (이터널 리턴의 실험체 '카티야' 스타일):\n"
-            "[참고 대사 모음]\n"
-            f"{Katja_Line}\n\n"
+            "말투 : 이터널 리턴의 실험체 '카티야' 스타일 > 에고 동화는 하지 말고 말투만 따라할것\n"
             
             "❌ 절대 하지 말 것:\n"
             "- 여러 단락으로 나눠서 설명\n"
             "- '버는 법은...', '쓸 곳은...' 같은 목차식 설명\n"
             "- 3문장 넘게 말하기\n\n"
+
              # ✅ 채널 전체 맥락 추가
             f"=== 채널 전체 대화 흐름 (참고용) ===\n{channel_context}\n\n"
             f"=== {user_name}과의 1:1 대화 ===\n{history_text}\n"
             f"=== 현재 분석에서 파악된 맥락(참고용) ===\n{reason_context}\n\n"
+
             f"유저: {user_message}\n\n"
             "답변 (3문장 이하, 핵심만):"
         )
