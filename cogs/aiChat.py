@@ -152,9 +152,9 @@ class AIChat(commands.Cog):
             f"1.'{user_message}': 이 문장이 [봇 멘션]으로 시작 → YES"
             "2. 나머지 → NO\n\n"
 
-            # f"=== 채널 전체 대화 ===\n{channel_ctx}"
-            # f"{user_name}: {user_message}\n\n"
-            # f"=== {user_name}과의 1:1 대화 ===\n{user_ctx}\n\n"
+            f"=== 채널 전체 대화 ===\n{channel_ctx}"
+            f"{user_name}: {user_message}\n\n"
+            f"=== {user_name}과의 1:1 대화 ===\n{user_ctx}\n\n"
 
             "━━━ [2단계] 응답 생성 (CALLED=YES인 경우만) ━━━\n"
             "말투: 카티야 스타일 (에고 동화 X, 말투만)\n"
