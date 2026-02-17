@@ -17,7 +17,6 @@ class User(Base):
     def __repr__(self):
         return f"<User(id={self.id}, active_er_nickname={self.active_er_nickname})>"
 
-
 class ERAccount(Base):
     """이터널 리턴 계정 정보"""
     __tablename__ = "er_accounts"

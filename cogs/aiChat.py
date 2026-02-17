@@ -10,7 +10,6 @@ import discord
 import asyncio
 import re
 
-
 CALL_CONTEXT_TURNS = 16
 CHAT_CONTEXT_TURNS = 5
 
@@ -20,13 +19,11 @@ reply_templates = [
     "이리와가 고양이 생각하는중... 이 아니고 대답을 고민중.",
 ]
 
-
 def _call_gemini(client, model: str, prompt: str) -> str:
     """Gemini 호출 후 text 파트만 추출 (thought_signature 등 non-text 무시)"""
     response = client.models.generate_content(model=model, contents=prompt)
     parts = response.candidates[0].content.parts
     return "".join(p.text for p in parts if hasattr(p, "text") and p.text).strip()
-
 
 def _parse_response(raw: str) -> tuple[str, str, str]:
     """
@@ -51,7 +48,6 @@ def _parse_response(raw: str) -> tuple[str, str, str]:
             in_answer = True
 
     return status, confirm_msg, "\n".join(answer_lines).strip()
-
 
 class AIChat(commands.Cog):
     def __init__(self, bot):
@@ -242,7 +238,6 @@ class AIChat(commands.Cog):
 
         print(f"🟢 응답 반환: {text[:40]!r}")
         return text
-
 
 async def setup(bot):
     await bot.add_cog(AIChat(bot))

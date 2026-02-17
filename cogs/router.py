@@ -20,14 +20,11 @@ class MessageRouter(commands.Cog):
             return
 
         # 2️⃣ 자유채팅 채널 → 자연어
-                # router.py의 자유채팅 채널 부분을 다음과 같이 수정:
         if message.channel.id in CHAT_CHANNEL_ID:
-            ai_cog = self.bot.get_cog("AIChat")  # ← 중요
+            ai_cog = self.bot.get_cog("AIChat") 
             if not ai_cog:
-                #print("AIChat cog 없음")
                 return
 
-            # await ai_cog.ask_ai(message, message.content)
             reply = await ai_cog.ask_ai(message, message.content)
 
             if not reply.strip():
