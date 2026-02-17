@@ -287,7 +287,10 @@ class RecordCog(commands.Cog):
                 assists = game["playerAssistant"]
                 
                 # 승리 여부 표시
-                result = "승리" if rank == 1 else f"{rank}위"
+                if game["matchingTeamMode"] == 4:
+                    result = "승리" if rank == 1 else f"패배"
+                else:
+                    result = "승리" if rank == 1 else f"{rank}위"
                 
                 # 게임 타입 상세 표시
                 game_type = self.get_game_type_name(game["matchingMode"], game["matchingTeamMode"])

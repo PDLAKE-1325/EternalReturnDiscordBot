@@ -1,10 +1,15 @@
 from google import genai
 from discord.ext import commands
 from config import AI_KEY
+from data import CURRENT_SEASON as CUR_SEASON
+from zoneinfo import ZoneInfo
+
 import traceback
 import discord
 import asyncio
-import random
+import datetime
+import re
+
 
 CALL_CONTEXT_TURNS = 16
 CHAT_CONTEXT_TURNS = 5
@@ -25,7 +30,6 @@ def _call_gemini(client, model: str, prompt: str) -> str:
 
 def _parse_response(raw: str) -> tuple[str, str, str]:
     """
-    AI 응답 파싱.
     ANSWER는 여러 줄일 수 있으므로 ANSWER: 이후 전부 수집.
     Returns: (status, confirm_msg, answer)
     """
@@ -53,12 +57,37 @@ class AIChat(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.client = genai.Client(api_key=AI_KEY)
-        self.model = "models/gemini-3-flash-preview"
+        self.model = "gemini-2.5-flash-preview-05-20"
 
         # channel_id -> [(speaker, message)]
         self.channel_history: dict[int, list[tuple[str, str]]] = {}
         # user_id -> [(role, message)]  role: "user" | "bot"
         self.user_chat_history: dict[int, list[tuple[str, str]]] = {}
+
+    # ── 멘션 전처리 ────────────────────────────────
+
+    def _resolve_mentions(self, message: discord.Message) -> tuple[bool, str]:
+        """
+        메시지 내 멘션을 처리.
+        - 봇 자신 멘션 포함 → (True, 멘션 제거된 텍스트)
+        - 다른 유저 멘션만 → (False, @이름 으로 치환된 텍스트)
+        """
+        content = message.content
+        bot_id = self.bot.user.id
+        bot_mentioned = False
+
+        # 봇 자신 멘션 체크 및 제거
+        if re.search(rf"<@!?{bot_id}>", content):
+            bot_mentioned = True
+            content = re.sub(rf"<@!?{bot_id}>", "", content).strip()
+
+        # 다른 유저 멘션을 @이름 으로 치환 (AI가 숫자 ID를 봇 호출로 오판하지 않도록)
+        for user in message.mentions:
+            if user.id != bot_id:
+                content = content.replace(f"<@{user.id}>", f"@{user.display_name}")
+                content = content.replace(f"<@!{user.id}>", f"@{user.display_name}")
+
+        return bot_mentioned, content.strip()
 
     # ── 컨텍스트 빌더 ──────────────────────────────
 
@@ -106,21 +135,24 @@ class AIChat(commands.Cog):
         bot_asked   = any(kw in last_bot for kw in ["나한테", "물어본거", "말하는거", "부른거", "알려줄까"])
         recent_replied = bool(last_bot)
 
+        now = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M:%S")
+
         prompt = (
-            "너는 디스코드 봇 '이리와'다. 이터널 리턴 봇이며 현재는 2026년 시즌 10.\n"
+            f"너는 디스코드 봇 '이리와'다. 이터널 리턴 봇이며 현재는 {now}(KST) 시즌 {CUR_SEASON}.\n"
             "카티야를 좋아하고, 툭툭 던지듯 짧게 말함. 본인 생각은 잘 드러내지 않음.\n\n"
 
             "━━━ [1단계] 호출 판정 ━━━\n"
-            "아래 채널 대화를 보고, 마지막 메시지가 봇(이리와)에게 한 말인지 판단해.\n\n"
+            "아래 채널 대화를 보고, 마지막 메시지가 봇(이리와)에게 한 말인지 판단해.\n"
+            "※ 메시지의 <@숫자> 멘션은 이미 @이름으로 치환되어 있음. 봇 자신 멘션은 미리 제거됨.\n\n"
 
             "판단 기준 (위 → 아래 순서로):\n"
             "0. 추임새 필터 (최우선): '엄','흠','음','어','ㅇㅎ','ㅋㅋ','ㄷㄷ','ㅎㅎ','ㄴㄴ','?','ㅁ?' 등 → NO\n"
             "   예외: 봇이 직전에 확인 질문을 했고 유저가 '응'/'어'/'ㅇㅇ'로 답한 경우만 YES\n"
-            "1. 다른 유저들끼리 대화 중 → NO\n"
-            "2. '이리와','리와','봇','@이리와' 등 이름 직접 언급 → YES\n"
+            "1. @다른유저 멘션이 있거나, 다른 유저들끼리 대화 중 → NO\n"
+            "2. '이리와','리와','봇' 등 봇 이름 직접 언급 → YES\n"
             f"3. 봇 확인 질문: {'있음' if bot_asked else '없음'} / 최근 봇 응답: {'있음' if recent_replied else '없음'}\n"
             "   확인 질문 후 긍정 답변 → YES / 명확한 후속 질문 → YES\n"
-            "4. 게임 관련이지만 봇 언급 없고 애매함 → UNCERTAIN\n"
+            "4. 봇 언급 없지만 봇을 부르는 것일 확률 개높음 → UNCERTAIN\n"
             "5. 나머지 → NO\n\n"
 
             f"=== 채널 전체 대화 ===\n{channel_ctx}"
@@ -135,7 +167,7 @@ class AIChat(commands.Cog):
 
             "━━━ 출력 형식 (이 형식만, 다른 말 붙이지 말 것) ━━━\n"
             "CALLED: YES 또는 NO 또는 UNCERTAIN\n"
-            "CONFIRM_MSG: (UNCERTAIN일 때만. 다양하게 변형: '나한테 물어본거?', '내가 알려줄까?' 등)\n"
+            "CONFIRM_MSG: (UNCERTAIN일 때만. 다양하게: '나한테 물어본거?', '내가 알려줄까?' 등)\n"
             "ANSWER: (YES일 때만 최종 답변)\n"
         )
 
@@ -149,7 +181,8 @@ class AIChat(commands.Cog):
     async def ask_ai(self, message: discord.Message, user_message: str) -> str:
         """
         라우터에서 호출됨.
-        - UNCERTAIN: 여기서 직접 reply 처리 후 "" 반환
+        - 봇 멘션 감지 시 AI 판정 없이 바로 응답 생성
+        - UNCERTAIN: 직접 reply 후 "" 반환
         - YES: 텍스트 반환 → 라우터가 channel.send()로 전송
         - NO: "" 반환
         """
@@ -157,11 +190,33 @@ class AIChat(commands.Cog):
         user_name  = message.author.display_name
         channel_id = message.channel.id
 
-        print(f"🟡 메시지 수신 - {user_name}: {user_message}")
-        self._add_channel(channel_id, user_name, user_message)
+        # 멘션 전처리: 봇 자신 멘션 감지 + 다른 유저 멘션 이름으로 치환
+        bot_mentioned, clean_message = self._resolve_mentions(message)
 
+        print(f"🟡 메시지 수신 - {user_name}: {clean_message}"
+              + (" [봇 멘션]" if bot_mentioned else ""))
+
+        self._add_channel(channel_id, user_name, clean_message)
+
+        # 봇 멘션이면 AI 판정 없이 바로 응답 생성
+        if bot_mentioned:
+            try:
+                _, _, answer = await self._process(message, f"[봇 멘션] {clean_message}")
+            except Exception:
+                print("🔴 _process 에러:")
+                traceback.print_exc()
+                return ""
+
+            text = answer or "왜 불렀어."
+            self._add_user(user_id, "user", clean_message)
+            self._add_user(user_id, "bot", text)
+            self._add_channel(channel_id, "이리와", text)
+            print(f"🟢 응답 반환(멘션): {text[:40]!r}")
+            return text
+
+        # 일반 메시지 → AI 판정
         try:
-            status, confirm_msg, answer = await self._process(message, user_message)
+            status, confirm_msg, answer = await self._process(message, clean_message)
         except Exception:
             print("🔴 _process 에러:")
             traceback.print_exc()
@@ -169,10 +224,9 @@ class AIChat(commands.Cog):
 
         print(f"🔵 판정={status!r}  확인={confirm_msg!r}  답변={answer[:40]!r}")
 
-        # UNCERTAIN → 확인 메시지 직접 reply (라우터엔 "" 반환)
         if status == "UNCERTAIN" and confirm_msg:
             await message.reply(confirm_msg, mention_author=False)
-            self._add_user(user_id, "user", user_message)
+            self._add_user(user_id, "user", clean_message)
             self._add_user(user_id, "bot", confirm_msg)
             self._add_channel(channel_id, "이리와", confirm_msg)
             return ""
@@ -182,7 +236,7 @@ class AIChat(commands.Cog):
             return ""
 
         text = answer or "몰라"
-        self._add_user(user_id, "user", user_message)
+        self._add_user(user_id, "user", clean_message)
         self._add_user(user_id, "bot", text)
         self._add_channel(channel_id, "이리와", text)
 

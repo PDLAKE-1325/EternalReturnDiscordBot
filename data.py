@@ -203,3 +203,5 @@ Character_Names_EN ={
   85: "Mirka",
   86: "Fenrir"
 }
+
+CURRENT_SEASON = 10
