@@ -158,14 +158,14 @@ class AIChat(commands.Cog):
 
             "━━━ [2단계] 응답 생성 (CALLED=YES인 경우만) ━━━\n"
             "말투: 카티야 스타일 (에고 동화 X, 말투만)\n"
+            "- **최고 중요** 이터널 리턴 정보는 현재 {now}(KST) 시즌 {CUR_SEASON}. 기준으로 찾아.\n"
             "- 2~3문장 이내, 핵심만\n"
             "- 정보를 알려줄땐 딱 정보만 말하기\n"
-            "- 이터널 리턴 정보는 현재 {now}(KST) 시즌 {CUR_SEASON}. 기준으로 찾아.\n"
             "- 줄바꿈 최대 1번\n"
             "- 목차식 설명 금지\n\n"
 
             "━━━ 출력 형식 (이 형식만, 다른 말 붙이지 말 것) ━━━\n"
-            "CALLED: YES 또는 NO 또는 UNCERTAIN\n"
+            "CALLED: YES 또는 NO\n"
             # "CONFIRM_MSG: (UNCERTAIN일 때만. 다양하게: '나한테 물어본거?', '내가 알려줄까?' 등)\n"
             "ANSWER: (YES일 때만 최종 답변)\n"
         )
@@ -221,7 +221,7 @@ class AIChat(commands.Cog):
             traceback.print_exc()
             return ""
 
-        print(f"🔵 판정={status!r}  확인={confirm_msg!r}  답변={answer[:40]!r}")
+        print(f"🔵 판정={status!r}  답변={answer[:40]!r}")
 
         # if status == "UNCERTAIN" and confirm_msg:
         #     await message.reply(confirm_msg, mention_author=False)
