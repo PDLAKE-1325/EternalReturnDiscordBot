@@ -249,7 +249,7 @@ class RecordCog(commands.Cog):
                     f"**Top 3:** {top3}회 ({top3/total_games*100:.1f}%)\n"
                     f"**평균 순위:** {avg_rank:.1f}위\n"
                     f"**평균 킬:** {avg_kills:.1f}\n"
-                    f"**KDA:** {kda:.2f}"
+                    f"**KD:** {kda:.2f}"
                 ),
                 inline=False
             )
