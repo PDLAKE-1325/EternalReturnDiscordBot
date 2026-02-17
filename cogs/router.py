@@ -20,18 +20,18 @@ class MessageRouter(commands.Cog):
             return
 
         # 2️⃣ 자유채팅 채널 → 자연어
-        if message.channel.id in CHAT_CHANNEL_ID:
-            ai_cog = self.bot.get_cog("AIChat") 
-            if not ai_cog:
-                return
+        # if message.channel.id in CHAT_CHANNEL_ID:
+        #     ai_cog = self.bot.get_cog("AIChat") 
+        #     if not ai_cog:
+        #         return
 
-            reply = await ai_cog.ask_ai(message, message.content)
+        #     reply = await ai_cog.ask_ai(message, message.content)
 
-            if not reply.strip():
-                return  # 빈 응답이면 아무것도 안 함
+        #     if not reply.strip():
+        #         return  # 빈 응답이면 아무것도 안 함
 
-            await message.channel.reply(reply)
-            return
+        #     await message.channel.reply(reply)
+        #     return
 
 
         #3️⃣ 그 외 채널 → 기본적으로 명령어만 허용
