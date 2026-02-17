@@ -57,7 +57,7 @@ class AIChat(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.client = genai.Client(api_key=AI_KEY)
-        self.model = "gemini-2.5-flash-preview-05-20"
+        self.model = "gemini-3-flash-preview"
 
         # channel_id -> [(speaker, message)]
         self.channel_history: dict[int, list[tuple[str, str]]] = {}
