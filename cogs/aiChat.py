@@ -1,4 +1,5 @@
 from google import genai
+from google.genai import types
 from discord.ext import commands
 from config import AI_KEY
 from data import CURRENT_SEASON as CUR_SEASON
@@ -21,7 +22,13 @@ reply_templates = [
 
 def _call_gemini(client, model: str, prompt: str) -> str:
     """Gemini 호출 후 text 파트만 추출 (thought_signature 등 non-text 무시)"""
-    response = client.models.generate_content(model=model, contents=prompt)
+    response = client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())]
+        )
+    )
     parts = response.candidates[0].content.parts
     return "".join(p.text for p in parts if hasattr(p, "text") and p.text).strip()
 
