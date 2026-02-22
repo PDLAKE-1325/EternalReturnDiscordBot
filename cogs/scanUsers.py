@@ -308,7 +308,7 @@ class LobbyScan(commands.Cog):
         return {"nickname": nickname, "tier": tier, "mmr": mmr, "rank": rank, "hidden": False}
 
     # ── Command ─────────────────────────────────
-    @commands.command(name="대기분석")
+    @commands.command(name="대기분석", aliases=["ㄷㄱㅂㅅ"])
     async def lobby_scan(self, ctx):
         if not ctx.message.attachments:
             await ctx.send("이미지 첨부 필요 <:08:1475208526694449338>")
