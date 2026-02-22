@@ -20,7 +20,7 @@ PAGES = {
             ("ㅇ전적 [닉네임]",     "전체 전적 정보 조회", "\n> 단축: ㅇㅈㅈ"),
             ("ㅇ랭크 [닉네임]",     "랭크 게임 정보 조회", "\n> 단축: ㅇㄹㅋ"),
             ("ㅇ최근게임 [닉네임]", "마지막 게임 전적 조회", "\n> 단축: ㅇㅊㄱㄱ"),
-            ("ㅇ대기분석 <대기화면 이미지 첨부>",     "해당 게임 유저 랭크 정보 조회", "\n> 단축: ㅇㄷㄱㅂㅅ"),
+            ("ㅇ대기분석 <대기화면 이미지 첨부>", "해당 게임 유저 랭크 정보 조회", "\n> 단축: ㅇㄷㄱㅂㅅ"),
         ],
     },
     "기타": {
@@ -84,14 +84,12 @@ class MainView(discord.ui.View):
         self.author_id = author_id
 
         for name, data in PAGES.items():
-            self.add_item(
-                CategoryButton(
-                    label=name,
-                    emoji=data["emoji"],
-                    bot_user=bot_user,
-                    author_id=author_id
-                )
-            )
+            self.add_item(CategoryButton(
+                label=name,
+                emoji=data["emoji"],
+                bot_user=bot_user,
+                author_id=author_id,
+            ))
 
     async def on_timeout(self):
         for item in self.children:
@@ -109,14 +107,15 @@ class CategoryButton(discord.ui.Button):
         self.author_id = author_id
 
     async def callback(self, interaction: discord.Interaction):
+        # 명령어 실행자 본인만 허용
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
-                "❌ 이 버튼은 명령어 작성자만 사용할 수 있습니다.",
-                ephemeral=True
+                "❌ 본인만 사용할 수 있는 버튼입니다.", ephemeral=True
             )
             return
+
         embed = build_detail_embed(self.label, self.bot_user)
-        view = DetailView(category=self.label, bot_user=self.bot_user)
+        view = DetailView(category=self.label, bot_user=self.bot_user, author_id=self.author_id)
         await interaction.response.edit_message(embed=embed, view=view)
 
 
@@ -131,14 +130,15 @@ class DetailView(discord.ui.View):
 
     @discord.ui.button(label="뒤로가기", emoji="◀", style=discord.ButtonStyle.secondary)
     async def back_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 명령어 실행자 본인만 허용
         if interaction.user.id != self.author_id:
             await interaction.response.send_message(
-                "❌ 이 버튼은 명령어 작성자만 사용할 수 있습니다.",
-                ephemeral=True
+                "❌ 본인만 사용할 수 있는 버튼입니다.", ephemeral=True
             )
             return
+
         embed = build_main_embed(self.bot_user)
-        view = MainView(self.bot_user)
+        view = MainView(self.bot_user, author_id=self.author_id)
         await interaction.response.edit_message(embed=embed, view=view)
 
     async def on_timeout(self):
@@ -155,7 +155,7 @@ class HelpCog(commands.Cog):
     @commands.command(name="도움", aliases=["ㄷㅇ"])
     async def record_help(self, ctx: commands.Context):
         embed = build_main_embed(self.bot.user)
-        view = MainView(self.bot.user)
+        view = MainView(self.bot.user, author_id=ctx.author.id)  # 실행자 ID 전달
         msg = await ctx.reply(embed=embed, view=view)
 
         await view.wait()
