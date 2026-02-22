@@ -45,7 +45,7 @@ class LobbyScan(commands.Cog):
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
         res = self.gemini.models.generate_content(
-            model="models/gemini-2.0-flash",
+            model="models/gemini-3-flash-preview",
             contents=[
                 types.Content(
                     role="user",
