@@ -92,7 +92,7 @@ class LobbyScan(commands.Cog):
         #    matchingTeamMode: 1=솔로, 2=듀오, 3=스쿼드
         await self.rl.wait()
         async with session.get(
-            f"{ER_BASE}/rank/{user_num}/{CURRENT_SEASON}/1",
+            f"{ER_BASE}/rank/{user_num}/{CURRENT_SEASON}/3",
             headers=headers
         ) as r:
             if r.status != 200:
