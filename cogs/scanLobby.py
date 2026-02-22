@@ -11,12 +11,13 @@ from config import AI_KEY, ER_KEY
 
 ER_BASE = "https://open-api.bser.io/v1"
 CURRENT_SEASON = 37   # 시즌 10
-MATCH_MODE     = 3    # 1=솔로, 2=듀오, 3=스쿼드(랭크)
+MATCH_MODE     = 3    # 3=스쿼드(랭크)
 
 # 비공개 닉네임 패턴: "실험체1", "실험체12" 등
 HIDDEN_NAME_RE = re.compile(r"^실험체\d+$")
 
-RANK_CACHE_TTL = 300  # 랭크 캐시 유지 시간 (초)
+RANK_CACHE_TTL = 3600  # 랭크 캐시 유지 시간 (초)
+MAX_RETRY_429  = 3     # 429 최대 재시도 횟수
 
 
 # ────────────────────────────────────────────
@@ -171,16 +172,36 @@ class LobbyScan(commands.Cog):
     def _set_rank_cache(self, user_id: str, data: dict):
         self._rank_cache[user_id] = (data, time.monotonic())
 
-    # ── Gemini OCR ──────────────────────────────
-    def extract_names_from_image(self, image_bytes: bytes) -> list[str]:
+    # ── Gemini OCR (팀 구분) ──────────────────
+    def extract_teams_from_image(self, image_bytes: bytes) -> list[list[str]]:
+        """
+        이미지에서 팀별 닉네임 목록을 추출한다.
+        반환값: [[팀1닉1, 팀1닉2, ...], [팀2닉1, ...], ...]
+        팀 구분이 불가능하면 전체를 하나의 팀으로 묶어 반환.
+        """
         prompt = (
             "이터널 리턴 대기창 스크린샷이다.\n"
-            "플레이어 닉네임만 줄바꿈으로 출력.\n"
-            "설명 절대 금지."
+            "화면에 보이는 팀을 구분하여 각 팀의 플레이어 닉네임을 출력하라.\n"
+            "출력 형식(예시, 팀 수·인원 수는 실제에 맞게):\n"
+            "팀1\n"
+            "닉네임A\n"
+            "닉네임B\n"
+            "닉네임C\n"
+            "\n"
+            "팀2\n"
+            "닉네임D\n"
+            "닉네임E\n"
+            "닉네임F\n"
+            "\n"
+            "규칙:\n"
+            "- '팀N' 헤더 다음 줄부터 해당 팀 닉네임을 한 줄에 하나씩 나열.\n"
+            "- 팀 사이에 반드시 빈 줄 하나.\n"
+            "- 닉네임 외 설명·번호·기호 절대 금지.\n"
+            "- 팀 구분이 불가능하면 '팀1' 하나로 전부 묶어 출력."
         )
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
         res = self.gemini.models.generate_content(
-            model="models/gemini-3-preview",
+            model="models/gemini-3-flash-preview",
             contents=[
                 types.Content(
                     role="user",
@@ -194,47 +215,43 @@ class LobbyScan(commands.Cog):
                 )
             ]
         )
-        # thought_signature 등 non-text part 무시
         text = "".join(
             part.text for part in res.candidates[0].content.parts
             if hasattr(part, "text") and part.text
         ).strip()
 
         print(f"[OCR 원본 응답]\n{text}\n{'-'*30}")
-        return [n.strip() for n in text.split("\n") if len(n.strip()) > 1]
+        return _parse_teams(text)
 
     # ── ER API ──────────────────────────────────
-    async def _get(self, session: aiohttp.ClientSession, url: str, **kwargs) -> tuple[int, dict]:
-        """GET 요청 + 429시 1초 뒤 1회 재시도"""
-        headers = {"x-api-key": ER_KEY}
-        for attempt in range(2):
-            await self.rl.wait()
-            async with session.get(url, headers=headers, **kwargs) as r:
-                body = await r.json()
-                if r.status == 429:
-                    print(f"[429] {url} → 1초 후 재시도 (attempt {attempt+1})")
-                    await asyncio.sleep(1.0)
-                    continue
-                return r.status, body
-        return 429, {}
-
     async def get_user_id(self, session: aiohttp.ClientSession, nickname: str) -> str | None:
         if nickname in self._userid_cache:
             print(f"[캐시 HIT] userId: {nickname!r} → {self._userid_cache[nickname]}")
             return self._userid_cache[nickname]
 
-        status, body = await self._get(
-            session,
-            f"{ER_BASE}/user/nickname",
-            params={"query": nickname}
-        )
-        print(f"[닉네임 조회] {nickname!r} → status={status}, body={body}")
-        if status != 200:
-            return None
-        user_id = body.get("user", {}).get("userId")
-        if user_id:
-            self._userid_cache[nickname] = user_id
-        return user_id
+        headers = {"x-api-key": ER_KEY}
+        for attempt in range(1, MAX_RETRY_429 + 1):
+            await self.rl.wait()
+            async with session.get(
+                f"{ER_BASE}/user/nickname",
+                headers=headers,
+                params={"query": nickname}
+            ) as r:
+                body = await r.json()
+                print(f"[닉네임 조회] {nickname!r} → status={r.status}, body={body}")
+                if r.status == 429:
+                    print(f"  └─ 429 Too Many Requests, {attempt}/{MAX_RETRY_429} 재시도 대기 1초...")
+                    await asyncio.sleep(1)
+                    continue
+                if r.status != 200:
+                    return None
+                user_id = body.get("user", {}).get("userId")
+                if user_id:
+                    self._userid_cache[nickname] = user_id
+                return user_id
+
+        print(f"[FAIL] {nickname!r}: 429 재시도 초과")
+        return None
 
     async def get_rank(self, session: aiohttp.ClientSession, user_id: str) -> dict | None:
         cached = self._get_rank_cache(user_id)
@@ -242,17 +259,28 @@ class LobbyScan(commands.Cog):
             print(f"[캐시 HIT] rank: userId={user_id}")
             return cached
 
-        status, body = await self._get(
-            session,
-            f"{ER_BASE}/rank/uid/{user_id}/{CURRENT_SEASON}/{MATCH_MODE}"
-        )
-        print(f"[랭크 조회] userId={user_id} → status={status}, body={body}")
-        if status != 200:
-            return None
-        user_rank = body.get("userRank")
-        if user_rank:
-            self._set_rank_cache(user_id, user_rank)
-        return user_rank
+        headers = {"x-api-key": ER_KEY}
+        for attempt in range(1, MAX_RETRY_429 + 1):
+            await self.rl.wait()
+            async with session.get(
+                f"{ER_BASE}/rank/uid/{user_id}/{CURRENT_SEASON}/{MATCH_MODE}",
+                headers=headers
+            ) as r:
+                body = await r.json()
+                print(f"[랭크 조회] userId={user_id} → status={r.status}, body={body}")
+                if r.status == 429:
+                    print(f"  └─ 429 Too Many Requests, {attempt}/{MAX_RETRY_429} 재시도 대기 1초...")
+                    await asyncio.sleep(1)
+                    continue
+                if r.status != 200:
+                    return None
+                user_rank = body.get("userRank")
+                if user_rank:
+                    self._set_rank_cache(user_id, user_rank)
+                return user_rank
+
+        print(f"[FAIL] rank userId={user_id}: 429 재시도 초과")
+        return None
 
     async def get_user_data(self, session: aiohttp.ClientSession, nickname: str) -> dict:
         """항상 dict 반환. 비공개/언랭/실패 모두 포함."""
@@ -289,83 +317,143 @@ class LobbyScan(commands.Cog):
         msg = await ctx.send("🔍 이미지 분석중...")
         print(f"\n{'='*40}\n[대기분석 시작] by {ctx.author}\n{'='*40}")
 
-        # ── Gemini OCR ──
-        names = await asyncio.to_thread(self.extract_names_from_image, image_bytes)
-        if not names:
+        # ── Gemini OCR (팀 구분) ──
+        teams: list[list[str]] = await asyncio.to_thread(
+            self.extract_teams_from_image, image_bytes
+        )
+        all_names = [name for team in teams for name in team]
+
+        if not all_names:
             await msg.edit(content="❌ 닉네임 인식 실패 (이미지를 확인해주세요)")
             return
 
-        hidden_count = sum(1 for n in names if HIDDEN_NAME_RE.match(n))
-        need_api     = len(names) - hidden_count
+        hidden_count = sum(1 for n in all_names if HIDDEN_NAME_RE.match(n))
+        need_api     = len(all_names) - hidden_count
 
-        names_preview = "\n".join(
-            f"• {n}  🔒" if HIDDEN_NAME_RE.match(n) else f"• {n}"
-            for n in names
-        )
+        # 진행상황 미리보기 (팀별)
+        preview_lines = []
+        for i, team in enumerate(teams, 1):
+            preview_lines.append(f"── 팀 {i} ──")
+            for n in team:
+                lock = "  🔒" if HIDDEN_NAME_RE.match(n) else ""
+                preview_lines.append(f"• {n}{lock}")
+        names_preview = "\n".join(preview_lines)
+
         await msg.edit(content=(
-            f"✅ **{len(names)}명** 인식 완료 (비공개 {hidden_count}명)\n"
+            f"✅ **{len(all_names)}명** 인식 완료 (팀 {len(teams)}개 | 비공개 {hidden_count}명)\n"
             f"```\n{names_preview}\n```\n"
             f"⏳ 전적 조회중... (0 / {need_api})"
         ))
-        print(f"[인식] 총={len(names)}, 비공개={hidden_count}, API 필요={need_api}")
+        print(f"[인식] 총={len(all_names)}, 팀={len(teams)}, 비공개={hidden_count}, API 필요={need_api}")
 
         # ── ER API 순차 조회 ──
-        results  = []
+        # teams 구조를 유지하며 result도 팀별로 수집
+        team_results: list[list[dict]] = []
         api_done = 0
 
         async with aiohttp.ClientSession() as session:
-            for name in names:
-                if not HIDDEN_NAME_RE.match(name):
-                    api_done += 1
-                    await msg.edit(content=(
-                        f"✅ **{len(names)}명** 인식 완료 (비공개 {hidden_count}명)\n"
-                        f"```\n{names_preview}\n```\n"
-                        f"⏳ 전적 조회중... ({api_done} / {need_api}) — `{name}`"
-                    ))
-                results.append(await self.get_user_data(session, name))
+            for team in teams:
+                tr = []
+                for name in team:
+                    if not HIDDEN_NAME_RE.match(name):
+                        api_done += 1
+                        await msg.edit(content=(
+                            f"✅ **{len(all_names)}명** 인식 완료 (팀 {len(teams)}개 | 비공개 {hidden_count}명)\n"
+                            f"```\n{names_preview}\n```\n"
+                            f"⏳ 전적 조회중... ({api_done} / {need_api}) — `{name}`"
+                        ))
+                    tr.append(await self.get_user_data(session, name))
+                team_results.append(tr)
 
-        # ── 결과 임베드 ──
+        # ── 결과 임베드 (팀별) ──
         embed = discord.Embed(
-            title=f"📊 대기창 분석 결과",
-            description=f"시즌 10 | 스쿼드 랭크",
+            title="📊 대기창 분석 결과",
+            description="시즌 10 | 스쿼드 랭크",
             color=discord.Color.blue()
         )
 
         ok_count   = 0
         fail_names = []
 
-        for r in results:
-            if r["hidden"]:
-                embed.add_field(name=r["nickname"], value="🔒 닉네임 비공개", inline=False)
-            elif r["tier"] is None:
-                fail_names.append(r["nickname"])
-            elif r["tier"] == "Unranked":
-                embed.add_field(
-                    name=r["nickname"],
-                    value=tier_display("Unranked"),
-                    inline=False
-                )
-                ok_count += 1
-            else:
-                embed.add_field(
-                    name=r["nickname"],
-                    value=f"{tier_display(r['tier'])} | {r['mmr']:,} RP | {r['rank']:,}위",
-                    inline=False
-                )
-                ok_count += 1
+        for team_idx, team_data in enumerate(team_results, 1):
+            team_lines = []
+            for r in team_data:
+                if r["hidden"]:
+                    team_lines.append("🔒 닉네임 비공개")
+                elif r["tier"] is None:
+                    fail_names.append(r["nickname"])
+                    team_lines.append(f"~~{r['nickname']}~~ ⚠️ 조회 실패")
+                elif r["tier"] == "Unranked":
+                    team_lines.append(f"**{r['nickname']}** — {tier_display('Unranked')}")
+                    ok_count += 1
+                else:
+                    team_lines.append(
+                        f"**{r['nickname']}** — {tier_display(r['tier'])} | {r['mmr']:,} RP | {r['rank']:,}위"
+                    )
+                    ok_count += 1
+
+            embed.add_field(
+                name=f"팀 {team_idx}",
+                value="\n".join(team_lines) if team_lines else "—",
+                inline=False
+            )
 
         if fail_names:
             embed.add_field(
-                name="⚠️ 조회 실패 (오인식 가능성)",
+                name="⚠️ 조회 실패 목록 (오인식 가능성)",
                 value="\n".join(f"• {n}" for n in fail_names),
                 inline=False
             )
 
         embed.set_footer(
-            text=f"총 {len(names)}명 | 조회 성공 {ok_count}명 | 비공개 {hidden_count}명"
+            text=f"총 {len(all_names)}명 | 팀 {len(teams)}개 | 조회 성공 {ok_count}명 | 비공개 {hidden_count}명"
         )
         await msg.edit(content="", embed=embed)
-        print(f"[완료] 성공={ok_count}, 비공개={hidden_count}, 실패={len(fail_names)}")
+        print(f"[완료] 팀={len(teams)}, 성공={ok_count}, 비공개={hidden_count}, 실패={len(fail_names)}")
+
+
+# ── OCR 응답 파서 ────────────────────────────
+def _parse_teams(text: str) -> list[list[str]]:
+    """
+    Gemini가 반환한 팀 구분 텍스트를 파싱하여 list[list[str]] 로 변환.
+
+    기대 형식:
+        팀1
+        닉네임A
+        닉네임B
+
+        팀2
+        닉네임C
+        ...
+
+    '팀N' 헤더가 없으면 전체를 하나의 팀으로 묶는다.
+    """
+    TEAM_HEADER_RE = re.compile(r"^팀\s*\d+$")
+    teams: list[list[str]] = []
+    current: list[str] = []
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if TEAM_HEADER_RE.match(line):
+            if current:
+                teams.append(current)
+            current = []
+        else:
+            if len(line) > 1:
+                current.append(line)
+
+    if current:
+        teams.append(current)
+
+    # 팀 헤더가 전혀 없으면 전체를 하나의 팀으로
+    if not teams:
+        names = [l.strip() for l in text.splitlines() if len(l.strip()) > 1]
+        if names:
+            teams = [names]
+
+    return teams
 
 
 async def setup(bot):
