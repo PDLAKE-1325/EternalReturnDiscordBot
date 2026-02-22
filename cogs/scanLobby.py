@@ -16,7 +16,7 @@ MATCH_MODE     = 3    # 1=솔로, 2=듀오, 3=스쿼드(랭크)
 # 비공개 닉네임 패턴: "실험체1", "실험체12" 등
 HIDDEN_NAME_RE = re.compile(r"^실험체\d+$")
 
-RANK_CACHE_TTL = 3600  # 랭크 캐시 유지 시간 (초)
+RANK_CACHE_TTL = 300  # 랭크 캐시 유지 시간 (초)
 
 
 # ────────────────────────────────────────────
@@ -180,7 +180,7 @@ class LobbyScan(commands.Cog):
         )
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
         res = self.gemini.models.generate_content(
-            model="models/gemini-3-flash-preview",
+            model="models/gemini-3-preview",
             contents=[
                 types.Content(
                     role="user",
@@ -204,26 +204,37 @@ class LobbyScan(commands.Cog):
         return [n.strip() for n in text.split("\n") if len(n.strip()) > 1]
 
     # ── ER API ──────────────────────────────────
+    async def _get(self, session: aiohttp.ClientSession, url: str, **kwargs) -> tuple[int, dict]:
+        """GET 요청 + 429시 1초 뒤 1회 재시도"""
+        headers = {"x-api-key": ER_KEY}
+        for attempt in range(2):
+            await self.rl.wait()
+            async with session.get(url, headers=headers, **kwargs) as r:
+                body = await r.json()
+                if r.status == 429:
+                    print(f"[429] {url} → 1초 후 재시도 (attempt {attempt+1})")
+                    await asyncio.sleep(1.0)
+                    continue
+                return r.status, body
+        return 429, {}
+
     async def get_user_id(self, session: aiohttp.ClientSession, nickname: str) -> str | None:
         if nickname in self._userid_cache:
             print(f"[캐시 HIT] userId: {nickname!r} → {self._userid_cache[nickname]}")
             return self._userid_cache[nickname]
 
-        headers = {"x-api-key": ER_KEY}
-        await self.rl.wait()
-        async with session.get(
+        status, body = await self._get(
+            session,
             f"{ER_BASE}/user/nickname",
-            headers=headers,
             params={"query": nickname}
-        ) as r:
-            body = await r.json()
-            print(f"[닉네임 조회] {nickname!r} → status={r.status}, body={body}")
-            if r.status != 200:
-                return None
-            user_id = body.get("user", {}).get("userId")
-            if user_id:
-                self._userid_cache[nickname] = user_id
-            return user_id
+        )
+        print(f"[닉네임 조회] {nickname!r} → status={status}, body={body}")
+        if status != 200:
+            return None
+        user_id = body.get("user", {}).get("userId")
+        if user_id:
+            self._userid_cache[nickname] = user_id
+        return user_id
 
     async def get_rank(self, session: aiohttp.ClientSession, user_id: str) -> dict | None:
         cached = self._get_rank_cache(user_id)
@@ -231,21 +242,17 @@ class LobbyScan(commands.Cog):
             print(f"[캐시 HIT] rank: userId={user_id}")
             return cached
 
-        headers = {"x-api-key": ER_KEY}
-        await self.rl.wait()
-        # ✅ user_rank.py와 동일한 엔드포인트: /rank/uid/{userId}/{seasonId}/{mode}
-        async with session.get(
-            f"{ER_BASE}/rank/uid/{user_id}/{CURRENT_SEASON}/{MATCH_MODE}",
-            headers=headers
-        ) as r:
-            body = await r.json()
-            print(f"[랭크 조회] userId={user_id} → status={r.status}, body={body}")
-            if r.status != 200:
-                return None
-            user_rank = body.get("userRank")
-            if user_rank:
-                self._set_rank_cache(user_id, user_rank)
-            return user_rank
+        status, body = await self._get(
+            session,
+            f"{ER_BASE}/rank/uid/{user_id}/{CURRENT_SEASON}/{MATCH_MODE}"
+        )
+        print(f"[랭크 조회] userId={user_id} → status={status}, body={body}")
+        if status != 200:
+            return None
+        user_rank = body.get("userRank")
+        if user_rank:
+            self._set_rank_cache(user_id, user_rank)
+        return user_rank
 
     async def get_user_data(self, session: aiohttp.ClientSession, nickname: str) -> dict:
         """항상 dict 반환. 비공개/언랭/실패 모두 포함."""
