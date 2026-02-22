@@ -111,17 +111,17 @@ def _calc_tier(mmr: int, rank: int, season_num: int) -> str:
         return "아이언"
 
 TIER_EMOJI = {
-    "이터니티":    "<:10:1475208548651765922>",
-    "데미갓":      "<:09:1475208537146789949>",
-    "미스릴":      "<:08:1475208526694449338>",
-    "메테오라이트": "<:07:1475208513968935044>",
-    "다이아몬드":  "<:06:1475208499939250358>",
-    "플레티넘":    "<:05:1475208491408035982>",
-    "골드":        "<:04:1475208482390278154>",
-    "실버":        "<:03:1475208472093266040>",
-    "브론즈":      "<:02:1475208463414984935>",
-    "아이언":      "<:01:1475208453550243981>",
-    "Unranked":    "<:00:1475208261480484877>",
+    "이터니티":    "<:Immortal:1475211106841661510>",
+    "데미갓":      "<:Titan:1475211026180997414>",
+    "미스릴":      "<:Mithril:1475210930643013674>",
+    "메테오라이트": "<:Meteorite:1475210893376880680>",
+    "다이아몬드":  "<:Diamond:1475210845943496886>",
+    "플레티넘":    "<:Platinum:1475210794273603614>",
+    "골드":        "<:Gold:1475210757623775274>",
+    "실버":        "<:Silver:1475210565831098690>",
+    "브론즈":      "<:Bronze:1475210549792080046>",
+    "아이언":      "<:Iron:1475210532611948698>",
+    "Unranked":    "<:Unrank:1475210494607491215>",
 }
 
 def tier_display(tier: str) -> str:
@@ -393,15 +393,15 @@ class LobbyScan(commands.Cog):
                     ok_count += 1
 
             embed.add_field(
-                name=f"팀 {team_idx}",
-                value="\n".join(team_lines) if team_lines else "—",
+                name=f"**팀 {team_idx}**",
+                value="\n> ".join(team_lines) if team_lines else "—",
                 inline=False
             )
 
         if fail_names:
             embed.add_field(
                 name="⚠️ 조회 실패 목록 (오인식 가능성)",
-                value="\n".join(f"• {n}" for n in fail_names),
+                value="\n> ".join(f"• {n}" for n in fail_names),
                 inline=False
             )
 
