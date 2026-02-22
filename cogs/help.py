@@ -19,8 +19,8 @@ PAGES = {
         "commands": [
             ("ㅇ전적 [닉네임]",     "전체 전적 정보 조회", "\n> 단축: ㅇㅈㅈ"),
             ("ㅇ랭크 [닉네임]",     "랭크 게임 정보 조회", "\n> 단축: ㅇㄹㅋ"),
-            ("ㅇ대기분석 <대기화면 이미지 첨부>",     "해당 게임 유저 랭크 정보 조회", "\n> 단축: ㅇㄷㄱㅂㅅ"),
             ("ㅇ최근게임 [닉네임]", "마지막 게임 전적 조회", "\n> 단축: ㅇㅊㄱㄱ"),
+            ("ㅇ대기분석 <대기화면 이미지 첨부>",     "해당 게임 유저 랭크 정보 조회", "\n> 단축: ㅇㄷㄱㅂㅅ"),
         ],
     },
     "기타": {
@@ -78,12 +78,20 @@ def build_detail_embed(category: str, bot_user) -> discord.Embed:
 class MainView(discord.ui.View):
     """메인 화면: 카테고리 버튼 나열"""
 
-    def __init__(self, bot_user):
+    def __init__(self, bot_user, author_id: int):
         super().__init__(timeout=120)
         self.bot_user = bot_user
+        self.author_id = author_id
 
         for name, data in PAGES.items():
-            self.add_item(CategoryButton(label=name, emoji=data["emoji"], bot_user=bot_user))
+            self.add_item(
+                CategoryButton(
+                    label=name,
+                    emoji=data["emoji"],
+                    bot_user=bot_user,
+                    author_id=author_id
+                )
+            )
 
     async def on_timeout(self):
         for item in self.children:
@@ -91,15 +99,22 @@ class MainView(discord.ui.View):
 
 
 class CategoryButton(discord.ui.Button):
-    def __init__(self, label: str, emoji: str, bot_user):
+    def __init__(self, label: str, emoji: str, bot_user, author_id: int):
         super().__init__(
             label=label,
             emoji=emoji,
             style=discord.ButtonStyle.primary,
         )
         self.bot_user = bot_user
+        self.author_id = author_id
 
     async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "❌ 이 버튼은 명령어 작성자만 사용할 수 있습니다.",
+                ephemeral=True
+            )
+            return
         embed = build_detail_embed(self.label, self.bot_user)
         view = DetailView(category=self.label, bot_user=self.bot_user)
         await interaction.response.edit_message(embed=embed, view=view)
@@ -108,13 +123,20 @@ class CategoryButton(discord.ui.Button):
 class DetailView(discord.ui.View):
     """상세 화면: 뒤로가기 버튼만 표시"""
 
-    def __init__(self, category: str, bot_user):
+    def __init__(self, category: str, bot_user, author_id: int):
         super().__init__(timeout=120)
         self.category = category
         self.bot_user = bot_user
+        self.author_id = author_id
 
     @discord.ui.button(label="뒤로가기", emoji="◀", style=discord.ButtonStyle.secondary)
     async def back_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                "❌ 이 버튼은 명령어 작성자만 사용할 수 있습니다.",
+                ephemeral=True
+            )
+            return
         embed = build_main_embed(self.bot_user)
         view = MainView(self.bot_user)
         await interaction.response.edit_message(embed=embed, view=view)
