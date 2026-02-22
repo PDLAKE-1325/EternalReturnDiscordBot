@@ -9,9 +9,10 @@ from google import genai
 from google.genai import types
 from config import AI_KEY, ER_KEY
 
+from data import CURRENT_SEASON_NUM, CURRENT_SEASON
+
 ER_BASE = "https://open-api.bser.io/v1"
-CURRENT_SEASON = 37   # 시즌 10
-MATCH_MODE     = 3    # 3=스쿼드(랭크)
+MATCH_MODE     = 3 
 
 # 비공개 닉네임 패턴: "실험체1", "실험체12" 등
 HIDDEN_NAME_RE = re.compile(r"^실험체\d+$")
@@ -263,7 +264,7 @@ class LobbyScan(commands.Cog):
         for attempt in range(1, MAX_RETRY_429 + 1):
             await self.rl.wait()
             async with session.get(
-                f"{ER_BASE}/rank/uid/{user_id}/{CURRENT_SEASON}/{MATCH_MODE}",
+                f"{ER_BASE}/rank/uid/{user_id}/{CURRENT_SEASON_NUM}/{MATCH_MODE}",
                 headers=headers
             ) as r:
                 body = await r.json()
@@ -300,7 +301,7 @@ class LobbyScan(commands.Cog):
 
         mmr  = rank_data.get("mmr", 0)
         rank = rank_data.get("rank", 0)
-        snum = _season_num(CURRENT_SEASON)
+        snum = _season_num(CURRENT_SEASON_NUM)
         tier = _calc_tier(mmr, rank, snum)
 
         # print(f"[OK] {nickname!r} → tier={tier}, mmr={mmr}, rank={rank}, season_num={snum}")
@@ -368,7 +369,7 @@ class LobbyScan(commands.Cog):
         # ── 결과 임베드 (팀별) ──
         embed = discord.Embed(
             title="📊 대기창 분석 결과",
-            description="시즌 10 | 스쿼드 랭크",
+            description=f"시즌 {CURRENT_SEASON} 랭크 정보",
             color=discord.Color.blue()
         )
 

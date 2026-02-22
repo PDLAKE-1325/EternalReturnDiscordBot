@@ -1,5 +1,4 @@
 #data.py
-import json
 Character_Names = {
   1: "재키",
   2: "아야",
@@ -205,3 +204,4 @@ Character_Names_EN ={
 }
 
 CURRENT_SEASON = 10
+CURRENT_SEASON_NUM = 37
