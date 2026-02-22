@@ -2,11 +2,15 @@ import discord
 from discord.ext import commands
 import aiohttp
 import asyncio
+import base64
 import time
 from google import genai
+from google.genai import types
 from config import AI_KEY, ER_KEY
 
 ER_BASE = "https://open-api.bser.io/v1"
+CURRENT_SEASON = 37  # ⚠️ 현재 시즌 ID로 교체 필요
+
 
 class RateLimiter:
     """초당 1회 보장"""
@@ -28,7 +32,7 @@ class LobbyScan(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.gemini = genai.Client(api_key=AI_KEY)
-        self.rl = RateLimiter(rate_per_sec=1)  # 🔥 초당 1회
+        self.rl = RateLimiter(rate_per_sec=1)
 
     # ---------------- Gemini OCR ----------------
     def extract_names_from_image(self, image_bytes: bytes) -> list[str]:
@@ -38,14 +42,25 @@ class LobbyScan(commands.Cog):
             "설명 절대 금지."
         )
 
+        # ✅ Fix 1: raw bytes → Base64 인코딩 문자열로 변환
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+        # ✅ Fix 2: contents 구조를 올바른 parts 형식으로 수정
         res = self.gemini.models.generate_content(
-            model="models/gemini-2.0-flash",
+            model="models/gemini-3-flash-preview",
             contents=[
-                {"text": prompt},
-                {"inline_data": {
-                    "mime_type": "image/png",
-                    "data": image_bytes
-                }}
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part(text=prompt),
+                        types.Part(
+                            inline_data=types.Blob(
+                                mime_type="image/png",
+                                data=image_b64
+                            )
+                        )
+                    ]
+                )
             ]
         )
 
@@ -73,17 +88,20 @@ class LobbyScan(commands.Cog):
             return None
 
         # 2️⃣ rank 조회
+        # ✅ Fix 3: 올바른 엔드포인트 /rank/{userNum}/{seasonId}/{matchingTeamMode}
+        #    matchingTeamMode: 1=솔로, 2=듀오, 3=스쿼드
         await self.rl.wait()
         async with session.get(
-            f"{ER_BASE}/user/{user_num}/rank",
+            f"{ER_BASE}/rank/{user_num}/{CURRENT_SEASON}/1",
             headers=headers
         ) as r:
             if r.status != 200:
                 return None
-            rank = await r.json()
+            rank_data = await r.json()
 
-        tier = rank.get("rank", {}).get("tier", "Unranked")
-        return {"nickname": nickname, "tier": tier}
+        tier = rank_data.get("userRank", {}).get("tier", "Unranked")
+        lp = rank_data.get("userRank", {}).get("mmr", 0)
+        return {"nickname": nickname, "tier": tier, "lp": lp}
 
     # ---------------- Command ----------------
     @commands.command(name="대기분석")
@@ -107,12 +125,18 @@ class LobbyScan(commands.Cog):
             await msg.edit(content="닉 추출 실패")
             return
 
+        await msg.edit(content=f"🔍 {len(names)}명 인식 완료, 전적 조회중...")
+
         results = []
         async with aiohttp.ClientSession() as session:
-            for name in names:  # 🔥 직렬 처리 (1RPS 안전)
+            for name in names:
                 data = await self.get_user_data(session, name)
                 if data:
                     results.append(data)
+
+        if not results:
+            await msg.edit(content="유저 정보 조회 실패")
+            return
 
         embed = discord.Embed(
             title="📊 대기창 분석",
@@ -122,10 +146,11 @@ class LobbyScan(commands.Cog):
         for r in results:
             embed.add_field(
                 name=r["nickname"],
-                value=f"티어: {r['tier']}",
+                value=f"티어: {r['tier']} | LP: {r['lp']}",
                 inline=False
             )
 
+        embed.set_footer(text=f"총 {len(results)}명 조회 완료")
         await msg.edit(content="", embed=embed)
 
 
