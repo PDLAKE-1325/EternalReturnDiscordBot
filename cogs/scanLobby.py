@@ -220,13 +220,13 @@ class LobbyScan(commands.Cog):
             if hasattr(part, "text") and part.text
         ).strip()
 
-        print(f"[OCR 원본 응답]\n{text}\n{'-'*30}")
+        # print(f"[OCR 원본 응답]\n{text}\n{'-'*30}")
         return _parse_teams(text)
 
     # ── ER API ──────────────────────────────────
     async def get_user_id(self, session: aiohttp.ClientSession, nickname: str) -> str | None:
         if nickname in self._userid_cache:
-            print(f"[캐시 HIT] userId: {nickname!r} → {self._userid_cache[nickname]}")
+            # print(f"[캐시 HIT] userId: {nickname!r} → {self._userid_cache[nickname]}")
             return self._userid_cache[nickname]
 
         headers = {"x-api-key": ER_KEY}
@@ -238,9 +238,9 @@ class LobbyScan(commands.Cog):
                 params={"query": nickname}
             ) as r:
                 body = await r.json()
-                print(f"[닉네임 조회] {nickname!r} → status={r.status}, body={body}")
+                # print(f"[닉네임 조회] {nickname!r} → status={r.status}, body={body}")
                 if r.status == 429:
-                    print(f"  └─ 429 Too Many Requests, {attempt}/{MAX_RETRY_429} 재시도 대기 1초...")
+                    # print(f"  └─ 429 Too Many Requests, {attempt}/{MAX_RETRY_429} 재시도 대기 1초...")
                     await asyncio.sleep(1)
                     continue
                 if r.status != 200:
@@ -250,13 +250,13 @@ class LobbyScan(commands.Cog):
                     self._userid_cache[nickname] = user_id
                 return user_id
 
-        print(f"[FAIL] {nickname!r}: 429 재시도 초과")
+        # print(f"[FAIL] {nickname!r}: 429 재시도 초과")
         return None
 
     async def get_rank(self, session: aiohttp.ClientSession, user_id: str) -> dict | None:
         cached = self._get_rank_cache(user_id)
         if cached is not None:
-            print(f"[캐시 HIT] rank: userId={user_id}")
+            # print(f"[캐시 HIT] rank: userId={user_id}")
             return cached
 
         headers = {"x-api-key": ER_KEY}
@@ -267,9 +267,9 @@ class LobbyScan(commands.Cog):
                 headers=headers
             ) as r:
                 body = await r.json()
-                print(f"[랭크 조회] userId={user_id} → status={r.status}, body={body}")
+                # print(f"[랭크 조회] userId={user_id} → status={r.status}, body={body}")
                 if r.status == 429:
-                    print(f"  └─ 429 Too Many Requests, {attempt}/{MAX_RETRY_429} 재시도 대기 1초...")
+                    # print(f"  └─ 429 Too Many Requests, {attempt}/{MAX_RETRY_429} 재시도 대기 1초...")
                     await asyncio.sleep(1)
                     continue
                 if r.status != 200:
@@ -279,23 +279,23 @@ class LobbyScan(commands.Cog):
                     self._set_rank_cache(user_id, user_rank)
                 return user_rank
 
-        print(f"[FAIL] rank userId={user_id}: 429 재시도 초과")
+        # print(f"[FAIL] rank userId={user_id}: 429 재시도 초과")
         return None
 
     async def get_user_data(self, session: aiohttp.ClientSession, nickname: str) -> dict:
         """항상 dict 반환. 비공개/언랭/실패 모두 포함."""
         if HIDDEN_NAME_RE.match(nickname):
-            print(f"[비공개] {nickname!r}")
+            # print(f"[비공개] {nickname!r}")
             return {"nickname": nickname, "tier": None, "mmr": None, "rank": None, "hidden": True}
 
         user_id = await self.get_user_id(session, nickname)
         if not user_id:
-            print(f"[FAIL] {nickname!r}: userId 없음")
+            # print(f"[FAIL] {nickname!r}: userId 없음")
             return {"nickname": nickname, "tier": None, "mmr": None, "rank": None, "hidden": False}
 
         rank_data = await self.get_rank(session, user_id)
         if not rank_data or not rank_data.get("rank"):
-            print(f"[언랭] {nickname!r}")
+            # print(f"[언랭] {nickname!r}")
             return {"nickname": nickname, "tier": "Unranked", "mmr": 0, "rank": None, "hidden": False}
 
         mmr  = rank_data.get("mmr", 0)
@@ -303,7 +303,7 @@ class LobbyScan(commands.Cog):
         snum = _season_num(CURRENT_SEASON)
         tier = _calc_tier(mmr, rank, snum)
 
-        print(f"[OK] {nickname!r} → tier={tier}, mmr={mmr}, rank={rank}, season_num={snum}")
+        # print(f"[OK] {nickname!r} → tier={tier}, mmr={mmr}, rank={rank}, season_num={snum}")
         return {"nickname": nickname, "tier": tier, "mmr": mmr, "rank": rank, "hidden": False}
 
     # ── Command ─────────────────────────────────
@@ -342,7 +342,7 @@ class LobbyScan(commands.Cog):
         await msg.edit(content=(
             f"✅ **{len(all_names)}명** 인식 완료 (팀 {len(teams)}개 | 비공개 {hidden_count}명)\n"
             f"```\n{names_preview}\n```\n"
-            f"⏳ 전적 조회중... (0 / {need_api})"
+            f"⧖ 전적 조회중... (0 / {need_api})"
         ))
         print(f"[인식] 총={len(all_names)}, 팀={len(teams)}, 비공개={hidden_count}, API 필요={need_api}")
 
