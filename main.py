@@ -43,6 +43,7 @@ async def load_cogs():
         "cogs.record",
         "cogs.account",
         "cogs.userRank",
+        'cogs.scanLobby',
         # "cogs.router",
     ]
 
