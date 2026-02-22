@@ -379,17 +379,22 @@ class LobbyScan(commands.Cog):
             team_lines = []
             for r in team_data:
                 if r["hidden"]:
-                    team_lines.append("> 𒄬 닉네임 비공개")
+                    team_lines.append("> 닉네임 비공개") # 𒄬
                 elif r["tier"] is None:
                     fail_names.append("> "+r["nickname"])
-                    team_lines.append(f"> ~~{r['nickname']}~~ ⚠️ 조회 실패")
+                    team_lines.append(f"> ~~{r['nickname']}~~ — 조회 실패")
                 elif r["tier"] == "Unranked":
                     team_lines.append(f"> {r['nickname']} — {tier_display('Unranked')}")
                     ok_count += 1
                 else:
-                    team_lines.append(
-                        f"> {r['nickname']} — {tier_display(r['tier'])} | {r['mmr']:,} RP | {r['rank']:,}위"
-                    )
+                    if r['tier'] == "이터니티":
+                        team_lines.append(
+                            f"> {r['nickname']} — {tier_display(r['tier'])} #{r['rank']:,}"
+                        )
+                    else:
+                        team_lines.append(
+                            f"> {r['nickname']} — {tier_display(r['tier'])}"
+                        )
                     ok_count += 1
 
             embed.add_field(
@@ -400,7 +405,7 @@ class LobbyScan(commands.Cog):
 
         if fail_names:
             embed.add_field(
-                name="⚠️ 조회 실패 목록 (오인식 가능성)",
+                name="𒄬 조회 실패 목록",
                 value="\n".join(f"• {n}" for n in fail_names),
                 inline=False
             )
