@@ -111,30 +111,22 @@ def _calc_tier(mmr: int, rank: int, season_num: int) -> str:
         return "아이언"
 
 TIER_EMOJI = {
-    "이터니티": 1475211106841661510,
-    "데미갓": 1475211026180997414,
-    "미스릴": 1475210930643013674,
-    "메테오라이트": 1475210893376880680,
-    "다이아몬드":  1475210845943496886,
-    "플레티넘":    1475210794273603614,
-    "골드":        1475210757623775274,
-    "실버":        1475210565831098690,
-    "브론즈":      1475210549792080046,
-    "아이언":      1475210532611948698,
-    "Unranked":    1475210494607491215,
+    "이터니티":    "<:Immortal:1475215908665299035>",
+    "데미갓":      "<:Titan:1475215920313139261>",
+    "미스릴":      "<:Mithril:1475215913778413609>",
+    "메테오라이트": "<:Meteorite:1475215912083652760>",
+    "다이아몬드":  "<:Diamond:1475215904789762169>",
+    "플레티넘":    "<:Platinum:1475215916332482893>",
+    "골드":        "<:Gold:1475215906635518012>",
+    "실버":        "<:Silver:1475215918509326438>",
+    "브론즈":      "<:Bronze:1475215903468556364>",
+    "아이언":    "<:Iron:1475215910313656422>",
+    "Unranked":    "<:Unrank:1475215921797664868>",
 }
 
-def tier_display(bot, tier: str) -> str:
-    emoji_id = TIER_EMOJI.get(tier)
-    if not emoji_id:
-        return tier
-
-    emoji = bot.get_emoji(emoji_id)
-
-    if emoji:
-        return f"{emoji} {tier}"
-    else:
-        return tier  # 못 불러오면 텍스트만
+def tier_display(tier: str) -> str:
+    emoji = TIER_EMOJI.get(tier, "")
+    return f"{emoji} {tier}"
 
 
 # ────────────────────────────────────────────
@@ -392,11 +384,11 @@ class LobbyScan(commands.Cog):
                     fail_names.append(r["nickname"])
                     team_lines.append(f"~~{r['nickname']}~~ ⚠️ 조회 실패")
                 elif r["tier"] == "Unranked":
-                    team_lines.append(f"**{r['nickname']}** — {tier_display(self.bot, 'Unranked')}")
+                    team_lines.append(f"**{r['nickname']}** — {tier_display('Unranked')}")
                     ok_count += 1
                 else:
                     team_lines.append(
-                        f"**{r['nickname']}** — {tier_display(self.bot, r['tier'])} | {r['mmr']:,} RP | {r['rank']:,}위"
+                        f"**{r['nickname']}** — {tier_display(r['tier'])} | {r['mmr']:,} RP | {r['rank']:,}위"
                     )
                     ok_count += 1
 
