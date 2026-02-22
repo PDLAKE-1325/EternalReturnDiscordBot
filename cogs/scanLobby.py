@@ -360,7 +360,7 @@ class LobbyScan(commands.Cog):
                         await msg.edit(content=(
                             f"✅ **{len(all_names)}명** 인식 완료 (팀 {len(teams)}개 | 비공개 {hidden_count}명)\n"
                             f"```\n{names_preview}\n```\n"
-                            f"⏳ 전적 조회중... ({api_done} / {need_api}) — `{name}`"
+                            f"⧖ 전적 조회중... ({api_done} / {need_api}) — `{name}`"
                         ))
                     tr.append(await self.get_user_data(session, name))
                 team_results.append(tr)
@@ -379,21 +379,21 @@ class LobbyScan(commands.Cog):
             team_lines = []
             for r in team_data:
                 if r["hidden"]:
-                    team_lines.append("🔒 닉네임 비공개")
+                    team_lines.append("> 𒄬 닉네임 비공개")
                 elif r["tier"] is None:
-                    fail_names.append(r["nickname"])
-                    team_lines.append(f"~~{r['nickname']}~~ ⚠️ 조회 실패")
+                    fail_names.append("> "+r["nickname"])
+                    team_lines.append(f"> ~~{r['nickname']}~~ ⚠️ 조회 실패")
                 elif r["tier"] == "Unranked":
-                    team_lines.append(f"**{r['nickname']}** — {tier_display('Unranked')}")
+                    team_lines.append(f"> {r['nickname']} — {tier_display('Unranked')}")
                     ok_count += 1
                 else:
                     team_lines.append(
-                        f"**{r['nickname']}** — {tier_display(r['tier'])} | {r['mmr']:,} RP | {r['rank']:,}위"
+                        f"> {r['nickname']} — {tier_display(r['tier'])} | {r['mmr']:,} RP | {r['rank']:,}위"
                     )
                     ok_count += 1
 
             embed.add_field(
-                name=f"**팀 {team_idx}**",
+                name=f"**팀 {team_idx:02d}**",
                 value="\n".join(team_lines) if team_lines else "—",
                 inline=False
             )
