@@ -111,22 +111,30 @@ def _calc_tier(mmr: int, rank: int, season_num: int) -> str:
         return "아이언"
 
 TIER_EMOJI = {
-    "이터니티":    "<:Immortal:1475211106841661510>",
-    "데미갓":      "<:Titan:1475211026180997414>",
-    "미스릴":      "<:Mithril:1475210930643013674>",
-    "메테오라이트": "<:Meteorite:1475210893376880680>",
-    "다이아몬드":  "<:Diamond:1475210845943496886>",
-    "플레티넘":    "<:Platinum:1475210794273603614>",
-    "골드":        "<:Gold:1475210757623775274>",
-    "실버":        "<:Silver:1475210565831098690>",
-    "브론즈":      "<:Bronze:1475210549792080046>",
-    "아이언":      "<:Iron:1475210532611948698>",
-    "Unranked":    "<:Unrank:1475210494607491215>",
+    "이터니티": 1475211106841661510,
+    "데미갓": 1475211026180997414,
+    "미스릴": 1475210930643013674,
+    "메테오라이트": 1475210893376880680,
+    "다이아몬드":  1475210845943496886,
+    "플레티넘":    1475210794273603614,
+    "골드":        1475210757623775274,
+    "실버":        1475210565831098690,
+    "브론즈":      1475210549792080046,
+    "아이언":      1475210532611948698,
+    "Unranked":    1475210494607491215,
 }
 
-def tier_display(tier: str) -> str:
-    emoji = TIER_EMOJI.get(tier, "")
-    return f"{emoji} {tier}"
+def tier_display(bot, tier: str) -> str:
+    emoji_id = TIER_EMOJI.get(tier)
+    if not emoji_id:
+        return tier
+
+    emoji = bot.get_emoji(emoji_id)
+
+    if emoji:
+        return f"{emoji} {tier}"
+    else:
+        return tier  # 못 불러오면 텍스트만
 
 
 # ────────────────────────────────────────────
@@ -310,7 +318,7 @@ class LobbyScan(commands.Cog):
     @commands.command(name="대기분석")
     async def lobby_scan(self, ctx):
         if not ctx.message.attachments:
-            await ctx.send("이미지 첨부 필요")
+            await ctx.send("이미지 첨부 필요 <:08:1475208526694449338>")
             return
 
         image_bytes = await ctx.message.attachments[0].read()
@@ -384,24 +392,24 @@ class LobbyScan(commands.Cog):
                     fail_names.append(r["nickname"])
                     team_lines.append(f"~~{r['nickname']}~~ ⚠️ 조회 실패")
                 elif r["tier"] == "Unranked":
-                    team_lines.append(f"**{r['nickname']}** — {tier_display('Unranked')}")
+                    team_lines.append(f"**{r['nickname']}** — {tier_display(self.bot, 'Unranked')}")
                     ok_count += 1
                 else:
                     team_lines.append(
-                        f"**{r['nickname']}** — {tier_display(r['tier'])} | {r['mmr']:,} RP | {r['rank']:,}위"
+                        f"**{r['nickname']}** — {tier_display(self.bot, r['tier'])} | {r['mmr']:,} RP | {r['rank']:,}위"
                     )
                     ok_count += 1
 
             embed.add_field(
                 name=f"**팀 {team_idx}**",
-                value="\n> ".join(team_lines) if team_lines else "—",
+                value="\n".join(team_lines) if team_lines else "—",
                 inline=False
             )
 
         if fail_names:
             embed.add_field(
                 name="⚠️ 조회 실패 목록 (오인식 가능성)",
-                value="\n> ".join(f"• {n}" for n in fail_names),
+                value="\n".join(f"• {n}" for n in fail_names),
                 inline=False
             )
 
