@@ -397,11 +397,11 @@ class LobbyScan(commands.Cog):
             "아래 닉네임들은 OCR 인식 결과인데 게임 API 조회에 실패했다.\n"
             "이미지를 다시 보고 각 닉네임이 실제로 어떻게 적혀 있는지 정확히 읽어라.\n\n"
             f"실패 목록:\n{names_str}\n\n"
-            "출력 형식 (불확실하면 후보 여러 개 '|' 로 구분):\n"
-            "원래닉네임|수정된닉네임\n"
-            "원래닉네임2|후보A|후보B\n\n"
+            "출력 형식 (불확실하면 후보 여러 개 '|[=]|' 로 구분):\n"
+            "원래닉네임|[=]|수정된닉네임\n"
+            "원래닉네임2|[=]|후보A|[=]|후보B\n\n"
             "주의사항:\n"
-            "- 반드시 '|' 구분자, 한 줄에 하나.\n"
+            "- 반드시 '|[=]|' 구분자, 한 줄에 하나.\n"
             "- 변경 없으면 원래 닉네임 그대로.\n"
             "- 하이픈류 문자(─ - 一 – —)는 원본 그대로.\n"
             "- 한글 초성 혼동 잦음: ㄹ↔ㄷ, ㄹ↔ㅁ, ㅂ↔ㅁ, ㅈ↔ㅊ, ㄱ↔ㅋ, ㄷ↔ㄹ, ㅅ↔ㅆ.\n"
@@ -425,9 +425,9 @@ class LobbyScan(commands.Cog):
         corrections: dict[str, list[str]] = {}
         for line in text.splitlines():
             line = line.strip()
-            if "|" not in line:
+            if "|[=]|" not in line:
                 continue
-            parts = line.split("|")
+            parts = line.split("|[=]|")
             original   = parts[0].strip()
             candidates = [p.strip() for p in parts[1:] if p.strip()]
             if original and candidates:
