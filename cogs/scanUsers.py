@@ -529,7 +529,7 @@ class LobbyScan(commands.Cog):
                 embed.add_field(
                     name=f"**팀 {team_idx:02d}**",
                     value="\n".join(team_lines) if team_lines else "—",
-                    inline= True
+                    inline= True if team_idx % 2 == 1 else False
                 )
             if _fail:
                 embed.add_field(
