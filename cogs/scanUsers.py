@@ -15,7 +15,7 @@ from data import CURRENT_SEASON_NUM, CURRENT_SEASON
 ER_BASE    = "https://open-api.bser.io/v1"
 MATCH_MODE = 3
 
-MAX_RECHECK    = 4     # Gemini 재질의 최대 라운드
+MAX_RECHECK    = 3     # Gemini 재질의 최대 라운드 (후보 수 강화로 3회로 충분)
 RANK_CACHE_TTL = 3600  # 랭크 캐시 유지 시간 (초)
 MAX_RETRY_429  = 3     # 429 최대 재시도 횟수
 
@@ -31,35 +31,6 @@ HYPHEN_VARIANTS = [
     "\u2014",  # —  EM DASH
     "\u2212",  # −  MINUS SIGN
     "\uff0d",  # － FULLWIDTH HYPHEN-MINUS
-]
-
-# OCR 혼동 문자 쌍 (인식값 → 실제 가능성, 한글 모음/자음 포함)
-OCR_CONFUSABLES = [
-    # 라틴/숫자
-    ("0", "O"), ("O", "0"),
-    ("1", "l"), ("l", "1"), ("1", "I"), ("I", "1"),
-    ("rn", "m"), ("m", "rn"),
-
-    # 한글 모음 (단모음 ↔ 이중모음)
-    ("ㅏ", "ㅑ"), ("ㅑ", "ㅏ"),
-    ("ㅓ", "ㅕ"), ("ㅕ", "ㅓ"),
-    ("ㅗ", "ㅛ"), ("ㅛ", "ㅗ"),
-    ("ㅜ", "ㅠ"), ("ㅠ", "ㅜ"),
-    ("ㅐ", "ㅔ"), ("ㅔ", "ㅐ"),
-    ("ㅡ", "ㅗ"), ("ㅗ", "ㅡ"),
-    ("ㅣ", "ㅏ"), ("ㅏ", "ㅣ"),
-    ("ㅣ", "ㅓ"), ("ㅓ", "ㅣ"),
-    ("ㅡ", "ㅜ"), ("ㅜ", "ㅡ"),
-
-    # 한글 초성 혼동
-    ("ㅈ", "ㅊ"), ("ㅊ", "ㅈ"),
-    ("ㄱ", "ㅋ"), ("ㅋ", "ㄱ"),
-    ("ㅂ", "ㅍ"), ("ㅍ", "ㅂ"),
-    ("ㅅ", "ㅆ"), ("ㅆ", "ㅅ"),
-    ("ㄷ", "ㄹ"), ("ㄹ", "ㄷ"),
-    ("ㅁ", "ㅂ"), ("ㅂ", "ㅁ"),
-    ("ㄷ", "ㅌ"), ("ㅌ", "ㄷ"),
-    ("ㅁ", "ㄹ"), ("ㄹ", "ㅁ"),
 ]
 
 
@@ -78,26 +49,6 @@ def _hyphen_variants(nickname: str) -> list[str]:
         if candidate != nickname and candidate not in candidates:
             candidates.append(candidate)
     return candidates
-
-
-def _ocr_variants(nickname: str) -> list[str]:
-    candidates = []
-    for wrong, right in OCR_CONFUSABLES:
-        if wrong in nickname:
-            candidate = nickname.replace(wrong, right, 1)
-            if candidate != nickname and candidate not in candidates:
-                candidates.append(candidate)
-    return candidates
-
-
-def _all_variants(nickname: str) -> list[str]:
-    seen = set()
-    result = []
-    for c in _hyphen_variants(nickname) + _ocr_variants(nickname):
-        if c not in seen:
-            seen.add(c)
-            result.append(c)
-    return result
 
 
 # ────────────────────────────────────────────
@@ -248,7 +199,6 @@ def _parse_teams(text: str) -> list[list[str]]:
         return [names] if names else []
 
     # ── 환각 팀 번호 탐지 ──
-    # 실제 팀 번호의 최댓값이 연속 범위를 크게 벗어나면 이전 팀에 병합
     sorted_nums = sorted(teams_numbered.keys())
     if sorted_nums:
         expected_max = sorted_nums[0] + len(sorted_nums) - 1
@@ -361,7 +311,7 @@ class LobbyScan(commands.Cog):
 
         반환값: { 원래_닉네임: [후보1, 후보2, ...] }
         Gemini가 변경 없다고 판단하면 원래 닉네임만 포함한 리스트 반환.
-        확실하지 않을 때 복수 후보를 반환할 수 있음.
+        후보를 최대 4개까지 반환할 수 있음.
         """
         names_str = "\n".join(f"- {n}" for n in failed_names)
         prompt = (
@@ -371,13 +321,17 @@ class LobbyScan(commands.Cog):
             f"실패 목록:\n{names_str}\n\n"
             "출력 형식:\n"
             "원래닉네임|+]수정된닉네임\n"
-            "원래닉네임2|+]후보A|+]후보B   ← 불확실하면 후보 여러 개 '|+]' 로 구분\n\n"
+            "원래닉네임2|+]후보A|+]후보B|+]후보C   ← 불확실하면 후보 최대 4개를 '|+]'로 구분\n\n"
             "규칙:\n"
             "- 반드시 '|+]' 구분자 사용, 한 줄에 하나씩.\n"
             "- 변경 없으면 원래 닉네임 그대로 출력.\n"
-            "- 하이픈 모양 문자(─, -, 一, –, — 등)가 있으면 원본 그대로.\n"
-            "- 한글 받침 없는 모음(ㅏ/ㅑ, ㅓ/ㅕ, ㅗ/ㅛ, ㅜ/ㅠ, ㅐ/ㅔ)과 "
-            "초성(ㅈ/ㅊ, ㄱ/ㅋ, ㅂ/ㅍ, ㅅ/ㅆ, ㄷ/ㄹ)은 OCR에서 혼동이 잦으니 주의.\n"
+            "- 확신이 없을 때는 가능성 있는 후보를 모두 나열하라 (최대 4개).\n"
+            "- 하이픈 모양 문자(─, -, 一, –, —, −, － 등)가 포함된 닉네임은 "
+            "각 하이픈 변형을 후보로 추가하라.\n"
+            "- OCR 혼동이 잦은 문자 쌍을 적극 고려하라:\n"
+            "  · 숫자/라틴: 0↔O, 1↔l↔I, rn↔m\n"
+            "  · 한글 모음: ㅏ↔ㅑ, ㅓ↔ㅕ, ㅗ↔ㅛ, ㅜ↔ㅠ, ㅐ↔ㅔ, ㅡ↔ㅗ↔ㅜ, ㅣ↔ㅏ↔ㅓ\n"
+            "  · 한글 초성: ㅈ↔ㅊ, ㄱ↔ㅋ, ㅂ↔ㅍ↔ㄹ↔ㅁ, ㅅ↔ㅆ, ㄷ↔ㄹ↔ㅌ\n"
             "- 설명·번호·기호 절대 금지."
         )
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
@@ -599,36 +553,36 @@ class LobbyScan(commands.Cog):
         await msg.edit(content="", embed=embed)
         print(f"[1차 완료] 팀={len(teams)}, 성공={ok_count}, 비공개={hidden_count}, 실패={len(fail_names)}")
 
-        # ── 0단계: 하이픈/OCR 변형 시도 (Gemini 없음) ──
-        variant_targets = [
+        # ── 0단계: 하이픈 변형 시도 (Gemini 없음) ──
+        hyphen_targets = [
             (ti, pi, r)
             for ti, team_data in enumerate(team_results)
             for pi, r in enumerate(team_data)
-            if not r["hidden"] and r["tier"] is None and _all_variants(r["nickname"])
+            if not r["hidden"] and r["tier"] is None and _hyphen_variants(r["nickname"])
         ]
-        if variant_targets:
-            print(f"[변형 시도] {len(variant_targets)}명 대상")
-            any_variant_updated = False
+        if hyphen_targets:
+            print(f"[하이픈 변형 시도] {len(hyphen_targets)}명 대상")
+            any_hyphen_updated = False
             async with aiohttp.ClientSession() as session:
-                for ti, pi, r in variant_targets:
+                for ti, pi, r in hyphen_targets:
                     old_name   = r["nickname"]
-                    candidates = _all_variants(old_name)
-                    print(f"[변형 시도] {old_name!r} → {candidates}")
+                    candidates = _hyphen_variants(old_name)
+                    print(f"[하이픈 변형 시도] {old_name!r} → {candidates}")
                     resolved   = None
                     for candidate in candidates:
                         new_data = await self.get_user_data(session, candidate)
                         if new_data["tier"] is not None:
                             new_data["nickname"] = candidate
                             resolved = new_data
-                            print(f"[변형 성공] {old_name!r} → {candidate!r}, tier={new_data['tier']}")
+                            print(f"[하이픈 변형 성공] {old_name!r} → {candidate!r}, tier={new_data['tier']}")
                             break
                     if resolved:
                         team_results[ti][pi] = resolved
-                        any_variant_updated  = True
+                        any_hyphen_updated   = True
                     else:
-                        print(f"[변형 전부 실패] {old_name!r}")
+                        print(f"[하이픈 변형 전부 실패] {old_name!r}")
 
-            if any_variant_updated:
+            if any_hyphen_updated:
                 embed, ok_count, fail_names = build_embed(team_results)
                 await msg.edit(embed=embed)
 
@@ -654,26 +608,20 @@ class LobbyScan(commands.Cog):
             )
             print(f"[Gemini 재시도 {recheck_round}] 수정안: {corrections}")
 
-            any_updated         = False
-            any_new_candidate   = False  # 새로운 후보가 하나라도 있는지
+            any_updated       = False
+            any_new_candidate = False
 
             async with aiohttp.ClientSession() as session:
                 for ti, pi, r in failed_entries:
-                    old_name        = r["nickname"]
-                    gemini_names    = corrections.get(old_name, [old_name])
-                    tried           = tried_candidates.setdefault(old_name, set())
+                    old_name     = r["nickname"]
+                    gemini_names = corrections.get(old_name, [old_name])
+                    tried        = tried_candidates.setdefault(old_name, set())
 
-                    # 새로운 후보 필터링
-                    new_candidates: list[str] = []
-                    for gn in gemini_names:
-                        if gn == old_name:
-                            continue
-                        if gn not in tried:
-                            new_candidates.append(gn)
-                            # 변형 후보도 추가
-                            for v in _all_variants(gn):
-                                if v not in tried and v not in new_candidates:
-                                    new_candidates.append(v)
+                    # 새로운 후보만 필터링 (원래 닉네임 및 이미 시도한 것 제외)
+                    new_candidates = [
+                        gn for gn in gemini_names
+                        if gn != old_name and gn not in tried
+                    ]
 
                     if not new_candidates:
                         print(f"[Gemini 재시도 {recheck_round}] {old_name!r}: 새 후보 없음, 스킵")
@@ -702,7 +650,6 @@ class LobbyScan(commands.Cog):
                 embed, ok_count, fail_names = build_embed(team_results)
                 await msg.edit(embed=embed)
 
-            # 새로운 후보가 단 하나도 없었으면 이후 라운드도 무의미 → 조기 종료
             if not any_new_candidate:
                 print(f"[조기 종료] 라운드 {recheck_round}: 모든 실패 닉네임에 새 후보 없음")
                 break
