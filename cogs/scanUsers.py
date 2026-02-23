@@ -1,11 +1,13 @@
 #cogs/scanUsers.py
 import re
+import io
 import discord
 from discord.ext import commands
 import aiohttp
 import asyncio
 import base64
 import time
+from PIL import Image, ImageEnhance
 from google import genai
 from google.genai import types
 from config import AI_KEY, ER_KEY
@@ -49,6 +51,41 @@ def _hyphen_variants(nickname: str) -> list[str]:
         if candidate != nickname and candidate not in candidates:
             candidates.append(candidate)
     return candidates
+
+
+# ────────────────────────────────────────────
+# 이미지 전처리 (Fotor 기본 조정 기준)
+# ─────────────────────────────────────────────
+# Fotor 슬라이더 → Pillow ImageEnhance 배율 매핑:
+#   factor = 1.0 + (fotor_value / 100)
+#   밝기  -30  → 0.70
+#   대비 +100  → 2.00
+#   채도 -100  → 0.00  (완전 흑백)
+#   선명도+150 → 2.50
+# ────────────────────────────────────────────
+def _preprocess_image(image_bytes: bytes) -> bytes:
+    """
+    OCR 정확도 향상을 위해 이미지를 전처리한다.
+    Fotor 기준 밝기 -30, 대비 +100, 채도 -100, 선명도 +150 적용.
+    반환값: 전처리된 PNG bytes
+    """
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    # 1. 밝기 (Brightness): factor 0.70
+    img = ImageEnhance.Brightness(img).enhance(0.70)
+
+    # 2. 대비 (Contrast): factor 2.00
+    img = ImageEnhance.Contrast(img).enhance(2.00)
+
+    # 3. 채도 (Color/Saturation): factor 0.00 → 완전 흑백
+    img = ImageEnhance.Color(img).enhance(0.00)
+
+    # 4. 선명도 (Sharpness): factor 2.50
+    img = ImageEnhance.Sharpness(img).enhance(2.50)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 # ────────────────────────────────────────────
@@ -257,9 +294,13 @@ class LobbyScan(commands.Cog):
     def extract_teams_from_image(self, image_bytes: bytes) -> list[list[str]]:
         """
         이미지에서 팀별 닉네임 목록을 추출한다.
+        전처리(밝기/대비/채도/선명도) 후 Gemini에 전달.
         반환값: [[팀1닉1, 팀1닉2, ...], [팀2닉1, ...], ...]
         팀 구분이 불가능하면 전체를 하나의 팀으로 묶어 반환.
         """
+        # ── 전처리 적용 ──
+        processed_bytes = _preprocess_image(image_bytes)
+
         prompt = (
             "이터널 리턴 대기창 스크린샷이다.\n"
             "화면에 표시된 팀 번호(01, 02, 03 ...)를 기준으로 팀을 구분하고, "
@@ -279,7 +320,7 @@ class LobbyScan(commands.Cog):
             "- 닉네임 외 설명·번호·기호 절대 금지.\n"
             "- 팀 구분이 불가능하면 '팀1' 하나로 전부 묶어 출력."
         )
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+        image_b64 = base64.b64encode(processed_bytes).decode("utf-8")
         res = self.gemini.models.generate_content(
             model="models/gemini-3-flash-preview",
             contents=[
@@ -308,11 +349,15 @@ class LobbyScan(commands.Cog):
     ) -> dict[str, list[str]]:
         """
         조회 실패한 닉네임 목록을 원본 이미지와 함께 Gemini에 재질의.
+        전처리된 이미지를 사용한다.
 
         반환값: { 원래_닉네임: [후보1, 후보2, ...] }
         Gemini가 변경 없다고 판단하면 원래 닉네임만 포함한 리스트 반환.
         후보를 최대 4개까지 반환할 수 있음.
         """
+        # ── 전처리 적용 ──
+        processed_bytes = _preprocess_image(image_bytes)
+
         names_str = "\n".join(f"- {n}" for n in failed_names)
         prompt = (
             "이터널 리턴 대기창 스크린샷이다.\n"
@@ -334,7 +379,7 @@ class LobbyScan(commands.Cog):
             "  · 한글 초성: ㅈ↔ㅊ, ㄱ↔ㅋ, ㅂ↔ㅍ↔ㄹ↔ㅁ, ㅅ↔ㅆ, ㄷ↔ㄹ↔ㅌ\n"
             "- 설명·번호·기호 절대 금지."
         )
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+        image_b64 = base64.b64encode(processed_bytes).decode("utf-8")
         res = self.gemini.models.generate_content(
             model="models/gemini-3-flash-preview",
             contents=[
@@ -445,11 +490,11 @@ class LobbyScan(commands.Cog):
     @commands.command(name="대기분석", aliases=["ㄷㄱㅂㅅ"])
     async def lobby_scan(self, ctx):
         if not ctx.message.attachments:
-            await ctx.send("이미지 첨부 필요")
+            await ctx.reply("이미지 첨부 필요")
             return
 
         image_bytes = await ctx.message.attachments[0].read()
-        msg = await ctx.send("🔍 이미지 분석중...")
+        msg = await ctx.reply("🔍 이미지 분석중...")
         print(f"\n{'='*40}\n[대기분석 시작] by {ctx.author}\n{'='*40}")
 
         # ── Gemini OCR (팀 구분) ──
