@@ -390,7 +390,6 @@ class LobbyScan(commands.Cog):
         hidden_count = sum(1 for n in all_names if HIDDEN_NAME_RE.match(n))
         need_api     = len(all_names) - hidden_count
 
-        # 진행상황 미리보기 (팀별)
         preview_lines = []
         for i, team in enumerate(teams, 1):
             preview_lines.append(f"── 팀 {i} ──")
@@ -407,7 +406,6 @@ class LobbyScan(commands.Cog):
         print(f"[인식] 총={len(all_names)}, 팀={len(teams)}, 비공개={hidden_count}, API 필요={need_api}")
 
         # ── ER API 순차 조회 ──
-        # teams 구조를 유지하며 result도 팀별로 수집
         team_results: list[list[dict]] = []
         api_done = 0
 
@@ -424,12 +422,62 @@ class LobbyScan(commands.Cog):
                         ))
                     tr.append(await self.get_user_data(session, name))
                 team_results.append(tr)
-                
-        # ── ER API 조회 실패 닉네임 Gemini 재시도 (최대 2회) ──
+
+        # ── 1차 결과 임베드 즉시 표시 ──
+        def build_embed(results: list[list[dict]]) -> tuple[discord.Embed, int, list[str]]:
+            """임베드 생성. (embed, ok_count, fail_names) 반환"""
+            embed = discord.Embed(
+                title="📊 대기창 분석 결과",
+                description=f"시즌 {CURRENT_SEASON} 랭크 정보",
+                color=discord.Color.blue()
+            )
+            _ok = 0
+            _fail = []
+            for team_idx, team_data in enumerate(results, 1):
+                team_lines = []
+                for r in team_data:
+                    if r["hidden"]:
+                        team_lines.append("> 닉네임 비공개")
+                    elif r["tier"] is None:
+                        _fail.append(r["nickname"])
+                        team_lines.append(f"> ~~{r['nickname']}~~ | 조회 실패")
+                    elif r["tier"] == "Unranked":
+                        team_lines.append(f"> {r['nickname']} | {tier_display('Unranked')}")
+                        _ok += 1
+                    else:
+                        if r["tier"] == "이터니티":
+                            team_lines.append(
+                                f"> {r['nickname']} | {tier_display(r['tier'])} #{r['rank']:,}"
+                            )
+                        else:
+                            team_lines.append(
+                                f"> {r['nickname']} | {tier_display(r['tier'])}"
+                            )
+                        _ok += 1
+                embed.add_field(
+                    name=f"**팀 {team_idx:02d}**",
+                    value="\n".join(team_lines) if team_lines else "—",
+                    inline=False
+                )
+            if _fail:
+                embed.add_field(
+                    name="𒄬 조회 실패 — 재시도 중...",
+                    value="\n".join(f"• {n}" for n in _fail),
+                    inline=False
+                )
+            embed.set_footer(
+                text=f"총 {len(all_names)}명 | 팀 {len(teams)}개 | 조회 성공 {_ok}명 | 비공개 {hidden_count}명"
+            )
+            return embed, _ok, _fail
+
+        embed, ok_count, fail_names = build_embed(team_results)
+        await msg.edit(content="", embed=embed)
+        print(f"[1차 완료] 팀={len(teams)}, 성공={ok_count}, 비공개={hidden_count}, 실패={len(fail_names)}")
+
+        # ── 실패 닉네임 Gemini 재시도 (최대 2회) ──
         MAX_RECHECK = 2
         for recheck_round in range(1, MAX_RECHECK + 1):
-            # 실패 목록 수집 (tier is None, 비공개 아님)
-            failed_entries: list[tuple[int, int, dict]] = [
+            failed_entries = [
                 (ti, pi, r)
                 for ti, team_data in enumerate(team_results)
                 for pi, r in enumerate(team_data)
@@ -439,10 +487,6 @@ class LobbyScan(commands.Cog):
                 break
 
             failed_names = [e[2]["nickname"] for e in failed_entries]
-            await msg.edit(content=(
-                f"⚠️ {len(failed_names)}명 조회 실패 — Gemini 재확인 중... "
-                f"({recheck_round}/{MAX_RECHECK})"
-            ))
             print(f"[재시도 {recheck_round}] 실패 닉네임: {failed_names}")
 
             corrections: dict[str, str] = await asyncio.to_thread(
@@ -450,78 +494,42 @@ class LobbyScan(commands.Cog):
             )
             print(f"[재시도 {recheck_round}] Gemini 수정안: {corrections}")
 
+            any_updated = False
             async with aiohttp.ClientSession() as session:
                 for ti, pi, r in failed_entries:
                     old_name = r["nickname"]
                     new_name = corrections.get(old_name, old_name)
 
                     if new_name == old_name:
-                        # 닉네임이 그대로면 재시도 의미 없음
-                        continue
+                        continue  # 변경 없으면 패스
 
-                    await msg.edit(content=(
-                        f"🔄 재시도 중... `{old_name}` → `{new_name}`"
-                    ))
                     new_data = await self.get_user_data(session, new_name)
-                    # 성공하면 닉네임을 수정된 이름으로 표시
                     if new_data["tier"] is not None:
                         new_data["nickname"] = new_name
                         team_results[ti][pi] = new_data
+                        any_updated = True
                         print(f"[재시도 성공] {old_name!r} → {new_name!r}, tier={new_data['tier']}")
                     else:
                         print(f"[재시도 실패] {old_name!r} → {new_name!r} 여전히 실패")
 
-        # ── 결과 임베드 (팀별) ──
-        embed = discord.Embed(
-            title="📊 대기창 분석 결과",
-            description=f"시즌 {CURRENT_SEASON} 랭크 정보",
-            color=discord.Color.blue()
-        )
+            # 하나라도 성공했으면 임베드 갱신
+            if any_updated:
+                embed, ok_count, fail_names = build_embed(team_results)
+                await msg.edit(embed=embed)
 
-        ok_count   = 0
-        fail_names = []
-
-        for team_idx, team_data in enumerate(team_results, 1):
-            team_lines = []
-            for r in team_data:
-                if r["hidden"]:
-                    team_lines.append("> 닉네임 비공개") # 𒄬
-                elif r["tier"] is None:
-                    fail_names.append("> "+r["nickname"])
-                    team_lines.append(f"> ~~{r['nickname']}~~ — 조회 실패")
-                elif r["tier"] == "Unranked":
-                    team_lines.append(f"> {r['nickname']} — {tier_display('Unranked')}")
-                    ok_count += 1
-                else:
-                    if r['tier'] == "이터니티":
-                        team_lines.append(
-                            f"> {r['nickname']} — {tier_display(r['tier'])} #{r['rank']:,}"
-                        )
-                    else:
-                        team_lines.append(
-                            f"> {r['nickname']} — {tier_display(r['tier'])}"
-                        )
-                    ok_count += 1
-
-            embed.add_field(
-                name=f"**팀 {team_idx:02d}**",
-                value="\n".join(team_lines) if team_lines else "—",
-                inline=False
-            )
-
-        if fail_names:
-            embed.add_field(
-                name="𒄬 조회 실패 목록",
-                value="\n".join(f"• {n}" for n in fail_names),
-                inline=False
-            )
-
-        embed.set_footer(
-            text=f"총 {len(all_names)}명 | 팀 {len(teams)}개 | 조회 성공 {ok_count}명 | 비공개 {hidden_count}명"
-        )
-        await msg.edit(content="", embed=embed)
-        print(f"[완료] 팀={len(teams)}, 성공={ok_count}, 비공개={hidden_count}, 실패={len(fail_names)}")
-
+        # ── 재시도 끝, 최종 임베드 (실패 필드 문구 정리) ──
+        final_embed, ok_count, fail_names = build_embed(team_results)
+        # 재시도 완료 후 실패 필드 이름 교체
+        for i, field in enumerate(final_embed.fields):
+            if field.name.startswith("𒄬 조회 실패 — 재시도"):
+                final_embed.set_field_at(
+                    i,
+                    name="𒄬 최종 조회 실패",
+                    value=field.value,
+                    inline=False
+                )
+        await msg.edit(embed=final_embed)
+        print(f"[최종] 팀={len(teams)}, 성공={ok_count}, 비공개={hidden_count}, 실패={len(fail_names)}")
 
 # ── OCR 응답 파서 ────────────────────────────
 def _parse_teams(text: str) -> list[list[str]]:
