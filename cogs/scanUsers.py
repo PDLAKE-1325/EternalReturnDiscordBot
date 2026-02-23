@@ -14,6 +14,7 @@ from data import CURRENT_SEASON_NUM, CURRENT_SEASON
 
 ER_BASE = "https://open-api.bser.io/v1"
 MATCH_MODE     = 3 
+MAX_RECHECK   = 2
 
 # 비공개 닉네임 패턴: "실험체1", "실험체12" 등
 HIDDEN_NAME_RE = re.compile(r"^실험체\d+$")
@@ -545,8 +546,42 @@ class LobbyScan(commands.Cog):
         await msg.edit(content="", embed=embed)
         print(f"[1차 완료] 팀={len(teams)}, 성공={ok_count}, 비공개={hidden_count}, 실패={len(fail_names)}")
 
-        # ── 재시도: Gemini 재질의 + 하이픈/OCR 변형 (최대 2라운드) ──
-        MAX_RECHECK = 2
+        # ── 0단계: 하이픈/OCR 변형 전부 소진 (Gemini 호출 없음, 횟수 제한 없음) ──
+        # MAX_RECHECK 카운트와 완전히 별개로, 변형 후보가 있는 닉네임은 무조건 여기서 다 시도한다.
+        variant_targets = [
+            (ti, pi, r)
+            for ti, team_data in enumerate(team_results)
+            for pi, r in enumerate(team_data)
+            if not r["hidden"] and r["tier"] is None and _all_variants(r["nickname"])
+        ]
+        if variant_targets:
+            print(f"[변형 시도] {len(variant_targets)}명 대상")
+            any_variant_updated = False
+            async with aiohttp.ClientSession() as session:
+                for ti, pi, r in variant_targets:
+                    old_name = r["nickname"]
+                    candidates = _all_variants(old_name)
+                    print(f"[변형 시도] {old_name!r} → {candidates}")
+                    resolved = None
+                    for candidate in candidates:
+                        new_data = await self.get_user_data(session, candidate)
+                        if new_data["tier"] is not None:
+                            new_data["nickname"] = candidate
+                            resolved = new_data
+                            print(f"[변형 성공] {old_name!r} → {candidate!r}, tier={new_data['tier']}")
+                            break
+                    if resolved:
+                        team_results[ti][pi] = resolved
+                        any_variant_updated = True
+                    else:
+                        print(f"[변형 전부 실패] {old_name!r}")
+
+            if any_variant_updated:
+                embed, ok_count, fail_names = build_embed(team_results)
+                await msg.edit(embed=embed)
+
+        # ── Gemini 재질의 라운드 (남은 실패건만, 최대 MAX_RECHECK 회) ──
+        # 변형으로도 못 찾은 경우에만 진입. Gemini 수정 닉 + 그 변형도 추가 시도.
         for recheck_round in range(1, MAX_RECHECK + 1):
             failed_entries = [
                 (ti, pi, r)
@@ -557,14 +592,13 @@ class LobbyScan(commands.Cog):
             if not failed_entries:
                 break
 
-            failed_names = [e[2]["nickname"] for e in failed_entries]
-            print(f"[재시도 {recheck_round}] 실패 닉네임: {failed_names}")
+            failed_names_list = [e[2]["nickname"] for e in failed_entries]
+            print(f"[Gemini 재시도 {recheck_round}] 실패 닉네임: {failed_names_list}")
 
-            # ① Gemini 재질의로 수정 후보 얻기
             corrections: dict[str, str] = await asyncio.to_thread(
-                self.recheck_failed_nicknames, image_bytes, failed_names
+                self.recheck_failed_nicknames, image_bytes, failed_names_list
             )
-            print(f"[재시도 {recheck_round}] Gemini 수정안: {corrections}")
+            print(f"[Gemini 재시도 {recheck_round}] 수정안: {corrections}")
 
             any_updated = False
             async with aiohttp.ClientSession() as session:
@@ -572,25 +606,18 @@ class LobbyScan(commands.Cog):
                     old_name = r["nickname"]
                     gemini_name = corrections.get(old_name, old_name)
 
-                    # ② 시도 순서: Gemini 수정 닉 → 하이픈/OCR 변형들
-                    # (Gemini 수정 닉이 원본과 같으면 스킵해서 변형만 시도)
-                    candidates_to_try: list[str] = []
+                    if gemini_name == old_name:
+                        # Gemini도 변경 없음 → 이 라운드에서 더 할 게 없음
+                        print(f"[Gemini 재시도 {recheck_round}] {old_name!r}: Gemini 변경 없음, 스킵")
+                        continue
 
-                    if gemini_name != old_name:
-                        candidates_to_try.append(gemini_name)
-                        # Gemini 수정 닉에서도 하이픈 변형 추가
-                        candidates_to_try.extend(_all_variants(gemini_name))
-
-                    # 원본 닉네임 기반 변형 (중복 제거)
-                    for v in _all_variants(old_name):
+                    # Gemini 수정 닉 + 그 변형까지 전부 시도
+                    candidates_to_try: list[str] = [gemini_name]
+                    for v in _all_variants(gemini_name):
                         if v not in candidates_to_try:
                             candidates_to_try.append(v)
 
-                    if not candidates_to_try:
-                        print(f"[재시도 {recheck_round}] {old_name!r}: 시도 가능한 후보 없음")
-                        continue
-
-                    print(f"[재시도 {recheck_round}] {old_name!r} 후보: {candidates_to_try}")
+                    print(f"[Gemini 재시도 {recheck_round}] {old_name!r} 후보: {candidates_to_try}")
 
                     resolved = None
                     for candidate in candidates_to_try:
@@ -598,17 +625,15 @@ class LobbyScan(commands.Cog):
                         if new_data["tier"] is not None:
                             new_data["nickname"] = candidate
                             resolved = new_data
-                            print(f"[재시도 성공] {old_name!r} → {candidate!r}, tier={new_data['tier']}")
+                            print(f"[Gemini 재시도 성공] {old_name!r} → {candidate!r}, tier={new_data['tier']}")
                             break
-                        # print(f"[재시도 실패] {old_name!r} → {candidate!r} 여전히 실패")
 
                     if resolved:
                         team_results[ti][pi] = resolved
                         any_updated = True
                     else:
-                        print(f"[재시도 {recheck_round}] {old_name!r}: 모든 후보 실패")
+                        print(f"[Gemini 재시도 {recheck_round}] {old_name!r}: 모든 후보 실패")
 
-            # 하나라도 성공했으면 임베드 갱신
             if any_updated:
                 embed, ok_count, fail_names = build_embed(team_results)
                 await msg.edit(embed=embed)
