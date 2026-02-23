@@ -1,2 +1,4 @@
 게임 조회 - gameId
 https://developer.eternalreturn.io/static/media/OpenAPI_KR_20251118.html#_%EC%86%8C%EA%B0%9C
+
+프로덕션 키 발급 후 1초 유예 제거
