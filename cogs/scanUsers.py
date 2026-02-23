@@ -71,17 +71,17 @@ def _preprocess_image(image_bytes: bytes) -> bytes:
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-    # 1. 밝기 (Brightness): factor 0.70
-    img = ImageEnhance.Brightness(img).enhance(0.70)
+    # 1. 밝기 (Brightness): factor 0.90
+    img = ImageEnhance.Brightness(img).enhance(0.90)
 
-    # 2. 대비 (Contrast): factor 2.00
-    img = ImageEnhance.Contrast(img).enhance(2.00)
+    # 2. 대비 (Contrast): factor 1.50
+    img = ImageEnhance.Contrast(img).enhance(1.50)
 
     # 3. 채도 (Color/Saturation): factor 0.00 → 완전 흑백
     img = ImageEnhance.Color(img).enhance(0.00)
 
-    # 4. 선명도 (Sharpness): factor 2.50
-    img = ImageEnhance.Sharpness(img).enhance(2.50)
+    # 4. 선명도 (Sharpness): factor 2.00
+    img = ImageEnhance.Sharpness(img).enhance(2.00)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -300,7 +300,6 @@ class LobbyScan(commands.Cog):
         """
         # ── 전처리 적용 ──
         processed_bytes = _preprocess_image(image_bytes)
-
         prompt = (
             "이터널 리턴 대기창 스크린샷이다.\n"
             "화면에 표시된 팀 번호(01, 02, 03 ...)를 기준으로 팀을 구분하고, "
@@ -318,11 +317,19 @@ class LobbyScan(commands.Cog):
             "- 팀 사이에 반드시 빈 줄 하나.\n"
             "- 화면에 보이지 않는 팀을 임의로 추가하지 말 것.\n"
             "- 닉네임 외 설명·번호·기호 절대 금지.\n"
-            "- 팀 구분이 불가능하면 '팀1' 하나로 전부 묶어 출력."
+            "- 팀 구분이 불가능하면 '팀1' 하나로 전부 묶어 출력.\n\n"
+            "닉네임 인식 주의사항:\n"
+            "- 하이픈 계열 문자(─, -, 一, –, —, −, － 등)는 이미지에 보이는 그대로 출력하라. 임의로 다른 하이픈으로 바꾸지 말 것.\n"
+            "- 대소문자를 정확히 구분하라.\n"
+            "한국어의 이중 모음과 받침 구분에 주의하라.\n"
+            "- OCR 혼동이 잦은 문자 쌍을 주의하라:\n"
+            # "- OCR 혼동이 잦은 문자 쌍을 적극 고려하라:\n"
+            "  · 한글 모음: ㅏ↔ㅑ, ㅓ↔ㅕ, ㅗ↔ㅛ, ㅜ↔ㅠ, ㅐ↔ㅔ, ㅡ↔ㅗ↔ㅜ, ㅣ↔ㅏ↔ㅓ\n"
+            "  · 한글 초성: ㅈ↔ㅊ, ㄱ↔ㅋ, ㅂ↔ㅍ↔ㄹ↔ㅁ, ㅅ↔ㅆ, ㄷ↔ㄹ↔ㅌ\n"
         )
         image_b64 = base64.b64encode(processed_bytes).decode("utf-8")
         res = self.gemini.models.generate_content(
-            model="models/gemini-3-flash-preview",
+            model="models/gemini-3-pro-preview",
             contents=[
                 types.Content(
                     role="user",
@@ -381,7 +388,7 @@ class LobbyScan(commands.Cog):
         )
         image_b64 = base64.b64encode(processed_bytes).decode("utf-8")
         res = self.gemini.models.generate_content(
-            model="models/gemini-3-flash-preview",
+            model="models/gemini-3-pro-preview",
             contents=[
                 types.Content(
                     role="user",
