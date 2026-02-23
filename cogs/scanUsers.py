@@ -14,7 +14,7 @@ from data import CURRENT_SEASON_NUM, CURRENT_SEASON
 
 ER_BASE = "https://open-api.bser.io/v1"
 MATCH_MODE     = 3 
-MAX_RECHECK   = 2
+MAX_RECHECK   = 4
 
 # 비공개 닉네임 패턴: "실험체1", "실험체12" 등
 HIDDEN_NAME_RE = re.compile(r"^실험체\d+$")
