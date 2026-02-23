@@ -12,42 +12,48 @@ from config import AI_KEY, ER_KEY
 
 from data import CURRENT_SEASON_NUM, CURRENT_SEASON
 
-ER_BASE = "https://open-api.bser.io/v1"
-MATCH_MODE     = 3 
-MAX_RECHECK   = 4
+ER_BASE    = "https://open-api.bser.io/v1"
+MATCH_MODE = 3
+
+MAX_RECHECK    = 4     # Gemini 재질의 최대 라운드
+RANK_CACHE_TTL = 3600  # 랭크 캐시 유지 시간 (초)
+MAX_RETRY_429  = 3     # 429 최대 재시도 횟수
 
 # 비공개 닉네임 패턴: "실험체1", "실험체12" 등
 HIDDEN_NAME_RE = re.compile(r"^실험체\d+$")
 
-RANK_CACHE_TTL = 3600  # 랭크 캐시 유지 시간 (초)
-MAX_RETRY_429  = 3     # 429 최대 재시도 횟수
-
 # ── 하이픈 변형 후보 ──────────────────────────
-# OCR이 자주 혼동하는 하이픈류 문자 목록
 HYPHEN_VARIANTS = [
-    "\u2500",  # ─  (BOX DRAWINGS LIGHT HORIZONTAL)
-    "-",       # -  (HYPHEN-MINUS, ASCII)
-    "\u4e00",  # 一 (CJK 한자 일)
-    "\u2013",  # –  (EN DASH)
-    "\u2014",  # —  (EM DASH)
-    "\u2212",  # −  (MINUS SIGN)
-    "\uff0d",  #－ (FULLWIDTH HYPHEN-MINUS)
+    "\u2500",  # ─  BOX DRAWINGS LIGHT HORIZONTAL
+    "-",       # -  HYPHEN-MINUS (ASCII)
+    "\u4e00",  # 一 CJK 한자 일
+    "\u2013",  # –  EN DASH
+    "\u2014",  # —  EM DASH
+    "\u2212",  # −  MINUS SIGN
+    "\uff0d",  # － FULLWIDTH HYPHEN-MINUS
 ]
 
-# OCR 혼동 문자 쌍 (단방향 — 인식값 → 실제 가능성)
+# OCR 혼동 문자 쌍 (인식값 → 실제 가능성, 한글 모음/자음 포함)
 OCR_CONFUSABLES = [
+    # 라틴/숫자
     ("0", "O"), ("O", "0"),
     ("1", "l"), ("l", "1"), ("1", "I"), ("I", "1"),
     ("rn", "m"), ("m", "rn"),
+    # 한글 모음 (단모음 ↔ 이중모음)
+    ("ㅏ", "ㅑ"), ("ㅑ", "ㅏ"),
+    ("ㅓ", "ㅕ"), ("ㅕ", "ㅓ"),
+    ("ㅗ", "ㅛ"), ("ㅛ", "ㅗ"),
+    ("ㅜ", "ㅠ"), ("ㅠ", "ㅜ"),
+    ("ㅐ", "ㅔ"), ("ㅔ", "ㅐ"),
+    # 한글 초성 혼동
+    ("ㅈ", "ㅊ"), ("ㅊ", "ㅈ"),
+    ("ㄱ", "ㅋ"), ("ㅋ", "ㄱ"),
+    ("ㅂ", "ㅍ"), ("ㅍ", "ㅂ"),
+    ("ㅅ", "ㅆ"), ("ㅆ", "ㅅ"),
 ]
 
+
 def _hyphen_variants(nickname: str) -> list[str]:
-    """
-    닉네임에 하이픈류 문자가 포함돼 있으면
-    모든 HYPHEN_VARIANTS 로 교체한 후보 목록을 반환.
-    원본과 동일한 후보는 제외.
-    """
-    # 닉네임 내에 하이픈류 문자가 하나라도 있는지 확인
     found_hyphen = None
     for ch in HYPHEN_VARIANTS:
         if ch in nickname:
@@ -63,10 +69,8 @@ def _hyphen_variants(nickname: str) -> list[str]:
             candidates.append(candidate)
     return candidates
 
+
 def _ocr_variants(nickname: str) -> list[str]:
-    """
-    OCR 혼동 문자 쌍을 기반으로 1-depth 변형 후보 반환.
-    """
     candidates = []
     for wrong, right in OCR_CONFUSABLES:
         if wrong in nickname:
@@ -75,8 +79,8 @@ def _ocr_variants(nickname: str) -> list[str]:
                 candidates.append(candidate)
     return candidates
 
+
 def _all_variants(nickname: str) -> list[str]:
-    """하이픈 변형 + OCR 변형을 합쳐 중복 제거 후 반환."""
     seen = set()
     result = []
     for c in _hyphen_variants(nickname) + _ocr_variants(nickname):
@@ -87,10 +91,11 @@ def _all_variants(nickname: str) -> list[str]:
 
 
 # ────────────────────────────────────────────
-# 티어 계산 (user_rank.py 동일 로직)
+# 티어 계산
 # ────────────────────────────────────────────
 def _season_num(season_id: int) -> int:
     return (season_id - 19) // 2
+
 
 def _calc_tier(mmr: int, rank: int, season_num: int) -> str:
     def eternity(mmr_cut, rank_cut_e, rank_cut_d):
@@ -165,7 +170,7 @@ def _calc_tier(mmr: int, rank: int, season_num: int) -> str:
         if mmr >= 1400: return "실버"
         if mmr >= 600:  return "브론즈"
         return "아이언"
-    else:  # season 10+
+    else:
         if mmr >= 8100: return eternity(8100, 300, 1000)
         if mmr >= 7400: return "미스릴"
         if mmr >= 6400: return "메테오라이트"
@@ -175,6 +180,7 @@ def _calc_tier(mmr: int, rank: int, season_num: int) -> str:
         if mmr >= 1400: return "실버"
         if mmr >= 600:  return "브론즈"
         return "아이언"
+
 
 TIER_EMOJI = {
     "이터니티":    "<:Immortal:1475215908665299035>",
@@ -186,13 +192,65 @@ TIER_EMOJI = {
     "골드":        "<:Gold:1475215906635518012>",
     "실버":        "<:Silver:1475215918509326438>",
     "브론즈":      "<:Bronze:1475215903468556364>",
-    "아이언":    "<:Iron:1475215910313656422>",
+    "아이언":      "<:Iron:1475215910313656422>",
     "Unranked":    "<:Unrank:1475215921797664868>",
 }
+
 
 def tier_display(tier: str) -> str:
     emoji = TIER_EMOJI.get(tier, "")
     return f"{emoji} {tier}"
+
+
+# ────────────────────────────────────────────
+# OCR 응답 파서
+# ────────────────────────────────────────────
+def _parse_teams(text: str) -> list[list[str]]:
+    """
+    Gemini가 반환한 팀 구분 텍스트를 파싱.
+    - 팀 번호가 불연속이면 빈 슬롯은 건너뛰되 경고 출력.
+    - 팀 번호가 연속 최댓값보다 2 이상 튀면 이전 팀에 병합 (환각 방지).
+    """
+    TEAM_HEADER_RE = re.compile(r"^팀\s*(\d+)$")
+    teams_numbered: dict[int, list[str]] = {}  # { 팀번호: [닉네임...] }
+    current_num: int | None = None
+    current: list[str] = []
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        m = TEAM_HEADER_RE.match(line)
+        if m:
+            if current_num is not None and current:
+                teams_numbered[current_num] = current
+            current_num = int(m.group(1))
+            current = []
+        else:
+            if len(line) > 1:
+                if current_num is not None:
+                    current.append(line)
+
+    if current_num is not None and current:
+        teams_numbered[current_num] = current
+
+    if not teams_numbered:
+        names = [l.strip() for l in text.splitlines() if len(l.strip()) > 1]
+        return [names] if names else []
+
+    # ── 환각 팀 번호 탐지 ──
+    # 실제 팀 번호의 최댓값이 연속 범위를 크게 벗어나면 이전 팀에 병합
+    sorted_nums = sorted(teams_numbered.keys())
+    if sorted_nums:
+        expected_max = sorted_nums[0] + len(sorted_nums) - 1
+        actual_max   = sorted_nums[-1]
+        if actual_max > expected_max + 1:
+            print(f"[파서 경고] 팀 번호 불연속: {sorted_nums} → 최댓값 {actual_max}를 {sorted_nums[-2]}에 병합")
+            last_valid = sorted_nums[-2]
+            teams_numbered[last_valid].extend(teams_numbered.pop(actual_max))
+            sorted_nums = sorted(teams_numbered.keys())
+
+    return [teams_numbered[n] for n in sorted_nums]
 
 
 # ────────────────────────────────────────────
@@ -223,10 +281,8 @@ class LobbyScan(commands.Cog):
         self.gemini = genai.Client(api_key=AI_KEY)
         self.rl = RateLimiter(rate_per_sec=1)
 
-        # 캐시: { nickname: userId }  영구
-        self._userid_cache: dict[str, str] = {}
-        # 캐시: { userId: (rank_data, cached_at) }  TTL
-        self._rank_cache: dict[str, tuple[dict, float]] = {}
+        self._userid_cache: dict[str, str]              = {}
+        self._rank_cache:   dict[str, tuple[dict, float]] = {}
 
     # ── 캐시 헬퍼 ──────────────────────────────
     def _get_rank_cache(self, user_id: str) -> dict | None:
@@ -247,21 +303,20 @@ class LobbyScan(commands.Cog):
         """
         prompt = (
             "이터널 리턴 대기창 스크린샷이다.\n"
-            "화면에 보이는 팀을 구분하여 각 팀의 플레이어 닉네임을 출력하라.\n"
-            "출력 형식(예시, 팀 수·인원 수는 실제에 맞게):\n"
+            "화면에 표시된 팀 번호(01, 02, 03 ...)를 기준으로 팀을 구분하고, "
+            "각 팀의 플레이어 닉네임을 출력하라.\n\n"
+            "출력 형식 (팀 수·인원 수는 이미지에 보이는 그대로):\n"
             "팀1\n"
             "닉네임A\n"
             "닉네임B\n"
-            "닉네임C\n"
             "\n"
             "팀2\n"
-            "닉네임D\n"
-            "닉네임E\n"
-            "닉네임F\n"
-            "\n"
+            "닉네임C\n"
+            "닉네임D\n\n"
             "규칙:\n"
             "- '팀N' 헤더 다음 줄부터 해당 팀 닉네임을 한 줄에 하나씩 나열.\n"
             "- 팀 사이에 반드시 빈 줄 하나.\n"
+            "- 화면에 보이지 않는 팀을 임의로 추가하지 말 것.\n"
             "- 닉네임 외 설명·번호·기호 절대 금지.\n"
             "- 팀 구분이 불가능하면 '팀1' 하나로 전부 묶어 출력."
         )
@@ -289,13 +344,15 @@ class LobbyScan(commands.Cog):
         # print(f"[OCR 원본 응답]\n{text}\n{'-'*30}")
         return _parse_teams(text)
 
-    def recheck_failed_nicknames(self, image_bytes: bytes, failed_names: list[str]) -> dict[str, str]:
+    def recheck_failed_nicknames(
+        self, image_bytes: bytes, failed_names: list[str]
+    ) -> dict[str, list[str]]:
         """
         조회 실패한 닉네임 목록을 원본 이미지와 함께 Gemini에 재질의.
-        잘못 읽혔을 가능성이 있으므로 올바른 닉네임을 다시 추출하게 한다.
 
-        반환값: { 원래_닉네임: 수정된_닉네임 }
-        (변경 없으면 원래 닉네임 그대로)
+        반환값: { 원래_닉네임: [후보1, 후보2, ...] }
+        Gemini가 변경 없다고 판단하면 원래 닉네임만 포함한 리스트 반환.
+        확실하지 않을 때 복수 후보를 반환할 수 있음.
         """
         names_str = "\n".join(f"- {n}" for n in failed_names)
         prompt = (
@@ -303,13 +360,15 @@ class LobbyScan(commands.Cog):
             "아래 닉네임들은 OCR 인식 결과인데 게임 API 조회에 실패했다. "
             "이미지를 다시 보고 각 닉네임이 실제로 어떻게 적혀 있는지 정확히 읽어라.\n\n"
             f"실패 목록:\n{names_str}\n\n"
-            "출력 형식 (변경 없으면 원래 그대로 출력):\n"
+            "출력 형식:\n"
             "원래닉네임|수정된닉네임\n"
-            "원래닉네임2|수정된닉네임2\n\n"
+            "원래닉네임2|후보A|후보B   ← 불확실하면 후보 여러 개 '|' 로 구분\n\n"
             "규칙:\n"
-            "- 반드시 '|' 구분자 사용.\n"
-            "- 한 줄에 하나씩.\n"
-            "- 닉네임에 하이픈 모양 문자(─, -, 一, –, — 등)가 있다면 원본 그대로 출력.\n"
+            "- 반드시 '|' 구분자 사용, 한 줄에 하나씩.\n"
+            "- 변경 없으면 원래 닉네임 그대로 출력.\n"
+            "- 하이픈 모양 문자(─, -, 一, –, — 등)가 있으면 원본 그대로.\n"
+            "- 한글 받침 없는 모음(ㅏ/ㅑ, ㅓ/ㅕ, ㅗ/ㅛ, ㅜ/ㅠ, ㅐ/ㅔ)과 "
+            "초성(ㅈ/ㅊ, ㄱ/ㅋ, ㅂ/ㅍ, ㅅ/ㅆ, ㄷ/ㄹ)은 OCR에서 혼동이 잦으니 주의.\n"
             "- 설명·번호·기호 절대 금지."
         )
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
@@ -333,19 +392,20 @@ class LobbyScan(commands.Cog):
             if hasattr(part, "text") and part.text
         ).strip()
 
-        corrections: dict[str, str] = {}
+        corrections: dict[str, list[str]] = {}
         for line in text.splitlines():
             line = line.strip()
             if "|" not in line:
                 continue
-            parts = line.split("|", 1)
-            original, corrected = parts[0].strip(), parts[1].strip()
-            if original and corrected:
-                corrections[original] = corrected
+            parts = line.split("|")
+            original   = parts[0].strip()
+            candidates = [p.strip() for p in parts[1:] if p.strip()]
+            if original and candidates:
+                corrections[original] = candidates
 
         # 목록에 없는 닉네임은 그대로
         for n in failed_names:
-            corrections.setdefault(n, n)
+            corrections.setdefault(n, [n])
 
         return corrections
 
@@ -355,7 +415,7 @@ class LobbyScan(commands.Cog):
             return self._userid_cache[nickname]
 
         headers = {"x-api-key": ER_KEY}
-        for attempt in range(1, MAX_RETRY_429 + 1):
+        for _ in range(MAX_RETRY_429):
             await self.rl.wait()
             async with session.get(
                 f"{ER_BASE}/user/nickname",
@@ -372,7 +432,6 @@ class LobbyScan(commands.Cog):
                 if user_id:
                     self._userid_cache[nickname] = user_id
                 return user_id
-
         return None
 
     async def get_rank(self, session: aiohttp.ClientSession, user_id: str) -> dict | None:
@@ -381,7 +440,7 @@ class LobbyScan(commands.Cog):
             return cached
 
         headers = {"x-api-key": ER_KEY}
-        for attempt in range(1, MAX_RETRY_429 + 1):
+        for _ in range(MAX_RETRY_429):
             await self.rl.wait()
             async with session.get(
                 f"{ER_BASE}/rank/uid/{user_id}/{CURRENT_SEASON_NUM}/{MATCH_MODE}",
@@ -397,7 +456,6 @@ class LobbyScan(commands.Cog):
                 if user_rank:
                     self._set_rank_cache(user_id, user_rank)
                 return user_rank
-
         return None
 
     async def get_user_data(self, session: aiohttp.ClientSession, nickname: str) -> dict:
@@ -419,24 +477,6 @@ class LobbyScan(commands.Cog):
         tier = _calc_tier(mmr, rank, snum)
 
         return {"nickname": nickname, "tier": tier, "mmr": mmr, "rank": rank, "hidden": False}
-
-    async def _try_variants(
-        self,
-        session: aiohttp.ClientSession,
-        nickname: str,
-    ) -> dict | None:
-        """
-        하이픈 변형 + OCR 변형 후보를 순서대로 시도.
-        성공한 첫 번째 결과 반환. 모두 실패하면 None.
-        """
-        for candidate in _all_variants(nickname):
-            data = await self.get_user_data(session, candidate)
-            if data["tier"] is not None:
-                print(f"[변형 성공] {nickname!r} → {candidate!r}, tier={data['tier']}")
-                data["nickname"] = candidate
-                return data
-            # print(f"[변형 실패] {nickname!r} → {candidate!r}")
-        return None
 
     # ── Command ─────────────────────────────────
     @commands.command(name="대기분석", aliases=["ㄷㄱㅂㅅ"])
@@ -495,15 +535,14 @@ class LobbyScan(commands.Cog):
                     tr.append(await self.get_user_data(session, name))
                 team_results.append(tr)
 
-        # ── 1차 결과 임베드 즉시 표시 ──
+        # ── 임베드 빌더 ──
         def build_embed(results: list[list[dict]]) -> tuple[discord.Embed, int, list[str]]:
-            """임베드 생성. (embed, ok_count, fail_names) 반환"""
             embed = discord.Embed(
                 title="📊 대기창 분석 결과",
                 description=f"시즌 {CURRENT_SEASON} 랭크 정보",
                 color=discord.Color.blue()
             )
-            _ok = 0
+            _ok   = 0
             _fail = []
             for team_idx, team_data in enumerate(results, 1):
                 team_lines = []
@@ -529,14 +568,10 @@ class LobbyScan(commands.Cog):
                 embed.add_field(
                     name=f"**팀 {team_idx:02d}**",
                     value="\n".join(team_lines) if team_lines else "—",
-                    inline= True
+                    inline=True
                 )
                 if team_idx % 2 == 0:
-                    embed.add_field(
-                        name="\u200b",
-                        value="\u200b",
-                        inline=False
-                    )
+                    embed.add_field(name="\u200b", value="\u200b", inline=True)
             if _fail:
                 embed.add_field(
                     name="𒄬 조회 실패 — 재시도 중...",
@@ -544,7 +579,10 @@ class LobbyScan(commands.Cog):
                     inline=False
                 )
             embed.set_footer(
-                text=f"총 {len(all_names)}명 | 팀 {len(teams)}개 | 조회 성공 {_ok}명 | 비공개 {hidden_count}명"
+                text=(
+                    f"총 {len(all_names)}명 | 팀 {len(teams)}개 "
+                    f"| 조회 성공 {_ok}명 | 비공개 {hidden_count}명"
+                )
             )
             return embed, _ok, _fail
 
@@ -552,8 +590,7 @@ class LobbyScan(commands.Cog):
         await msg.edit(content="", embed=embed)
         print(f"[1차 완료] 팀={len(teams)}, 성공={ok_count}, 비공개={hidden_count}, 실패={len(fail_names)}")
 
-        # ── 0단계: 하이픈/OCR 변형 전부 소진 (Gemini 호출 없음, 횟수 제한 없음) ──
-        # MAX_RECHECK 카운트와 완전히 별개로, 변형 후보가 있는 닉네임은 무조건 여기서 다 시도한다.
+        # ── 0단계: 하이픈/OCR 변형 시도 (Gemini 없음) ──
         variant_targets = [
             (ti, pi, r)
             for ti, team_data in enumerate(team_results)
@@ -565,10 +602,10 @@ class LobbyScan(commands.Cog):
             any_variant_updated = False
             async with aiohttp.ClientSession() as session:
                 for ti, pi, r in variant_targets:
-                    old_name = r["nickname"]
+                    old_name   = r["nickname"]
                     candidates = _all_variants(old_name)
                     print(f"[변형 시도] {old_name!r} → {candidates}")
-                    resolved = None
+                    resolved   = None
                     for candidate in candidates:
                         new_data = await self.get_user_data(session, candidate)
                         if new_data["tier"] is not None:
@@ -578,7 +615,7 @@ class LobbyScan(commands.Cog):
                             break
                     if resolved:
                         team_results[ti][pi] = resolved
-                        any_variant_updated = True
+                        any_variant_updated  = True
                     else:
                         print(f"[변형 전부 실패] {old_name!r}")
 
@@ -586,8 +623,10 @@ class LobbyScan(commands.Cog):
                 embed, ok_count, fail_names = build_embed(team_results)
                 await msg.edit(embed=embed)
 
-        # ── Gemini 재질의 라운드 (남은 실패건만, 최대 MAX_RECHECK 회) ──
-        # 변형으로도 못 찾은 경우에만 진입. Gemini 수정 닉 + 그 변형도 추가 시도.
+        # ── Gemini 재질의 라운드 ──
+        # tried_candidates: { 원래닉네임: {이미 시도한 후보들} }
+        tried_candidates: dict[str, set[str]] = {}
+
         for recheck_round in range(1, MAX_RECHECK + 1):
             failed_entries = [
                 (ti, pi, r)
@@ -601,32 +640,42 @@ class LobbyScan(commands.Cog):
             failed_names_list = [e[2]["nickname"] for e in failed_entries]
             print(f"[Gemini 재시도 {recheck_round}] 실패 닉네임: {failed_names_list}")
 
-            corrections: dict[str, str] = await asyncio.to_thread(
+            corrections: dict[str, list[str]] = await asyncio.to_thread(
                 self.recheck_failed_nicknames, image_bytes, failed_names_list
             )
             print(f"[Gemini 재시도 {recheck_round}] 수정안: {corrections}")
 
-            any_updated = False
+            any_updated         = False
+            any_new_candidate   = False  # 새로운 후보가 하나라도 있는지
+
             async with aiohttp.ClientSession() as session:
                 for ti, pi, r in failed_entries:
-                    old_name = r["nickname"]
-                    gemini_name = corrections.get(old_name, old_name)
+                    old_name        = r["nickname"]
+                    gemini_names    = corrections.get(old_name, [old_name])
+                    tried           = tried_candidates.setdefault(old_name, set())
 
-                    if gemini_name == old_name:
-                        # Gemini도 변경 없음 → 이 라운드에서 더 할 게 없음
-                        print(f"[Gemini 재시도 {recheck_round}] {old_name!r}: Gemini 변경 없음, 스킵")
+                    # 새로운 후보 필터링
+                    new_candidates: list[str] = []
+                    for gn in gemini_names:
+                        if gn == old_name:
+                            continue
+                        if gn not in tried:
+                            new_candidates.append(gn)
+                            # 변형 후보도 추가
+                            for v in _all_variants(gn):
+                                if v not in tried and v not in new_candidates:
+                                    new_candidates.append(v)
+
+                    if not new_candidates:
+                        print(f"[Gemini 재시도 {recheck_round}] {old_name!r}: 새 후보 없음, 스킵")
                         continue
 
-                    # Gemini 수정 닉 + 그 변형까지 전부 시도
-                    candidates_to_try: list[str] = [gemini_name]
-                    for v in _all_variants(gemini_name):
-                        if v not in candidates_to_try:
-                            candidates_to_try.append(v)
-
-                    print(f"[Gemini 재시도 {recheck_round}] {old_name!r} 후보: {candidates_to_try}")
+                    any_new_candidate = True
+                    tried.update(new_candidates)
+                    print(f"[Gemini 재시도 {recheck_round}] {old_name!r} 후보: {new_candidates}")
 
                     resolved = None
-                    for candidate in candidates_to_try:
+                    for candidate in new_candidates:
                         new_data = await self.get_user_data(session, candidate)
                         if new_data["tier"] is not None:
                             new_data["nickname"] = candidate
@@ -636,7 +685,7 @@ class LobbyScan(commands.Cog):
 
                     if resolved:
                         team_results[ti][pi] = resolved
-                        any_updated = True
+                        any_updated          = True
                     else:
                         print(f"[Gemini 재시도 {recheck_round}] {old_name!r}: 모든 후보 실패")
 
@@ -644,7 +693,12 @@ class LobbyScan(commands.Cog):
                 embed, ok_count, fail_names = build_embed(team_results)
                 await msg.edit(embed=embed)
 
-        # ── 재시도 끝, 최종 임베드 (실패 필드 문구 정리) ──
+            # 새로운 후보가 단 하나도 없었으면 이후 라운드도 무의미 → 조기 종료
+            if not any_new_candidate:
+                print(f"[조기 종료] 라운드 {recheck_round}: 모든 실패 닉네임에 새 후보 없음")
+                break
+
+        # ── 최종 임베드 (실패 필드 문구 정리) ──
         final_embed, ok_count, fail_names = build_embed(team_results)
         for i, field in enumerate(final_embed.fields):
             if field.name.startswith("𒄬 조회 실패 — 재시도"):
@@ -656,37 +710,6 @@ class LobbyScan(commands.Cog):
                 )
         await msg.edit(embed=final_embed)
         print(f"[최종] 팀={len(teams)}, 성공={ok_count}, 비공개={hidden_count}, 실패={len(fail_names)}")
-
-# ── OCR 응답 파서 ────────────────────────────
-def _parse_teams(text: str) -> list[list[str]]:
-    """
-    Gemini가 반환한 팀 구분 텍스트를 파싱하여 list[list[str]] 로 변환.
-    """
-    TEAM_HEADER_RE = re.compile(r"^팀\s*\d+$")
-    teams: list[list[str]] = []
-    current: list[str] = []
-
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        if TEAM_HEADER_RE.match(line):
-            if current:
-                teams.append(current)
-            current = []
-        else:
-            if len(line) > 1:
-                current.append(line)
-
-    if current:
-        teams.append(current)
-
-    if not teams:
-        names = [l.strip() for l in text.splitlines() if len(l.strip()) > 1]
-        if names:
-            teams = [names]
-
-    return teams
 
 
 async def setup(bot):
