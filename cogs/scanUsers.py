@@ -1,13 +1,11 @@
 #cogs/scanUsers.py
 import re
-import io
 import discord
 from discord.ext import commands
 import aiohttp
 import asyncio
 import base64
 import time
-from PIL import Image, ImageEnhance, ImageFilter
 from google import genai
 from google.genai import types
 from config import AI_KEY, ER_KEY
@@ -22,75 +20,6 @@ HIDDEN_NAME_RE = re.compile(r"^실험체\d+$")
 
 RANK_CACHE_TTL = 3600  # 랭크 캐시 유지 시간 (초)
 MAX_RETRY_429  = 3     # 429 최대 재시도 횟수
-
-
-# ────────────────────────────────────────────
-# 닉네임 정규화
-# ────────────────────────────────────────────
-# OCR이 유사하게 생긴 다른 유니코드 문자로 읽어오는 경우를 처리
-CHAR_NORMALIZE = str.maketrans({
-    # 하이픈 계열
-    '\u2013': '-',   # en dash –
-    '\u2014': '-',   # em dash —
-    '\u2010': '-',   # hyphen ‐
-    '\u2011': '-',   # non-breaking hyphen
-    '\u00AD': '-',   # soft hyphen (보이지 않음)
-    '\u30FC': '-',   # 가타카나 장음 ー
-    '\uFF0D': '-',   # 전각 하이픈 －
-    '\u2212': '-',   # minus sign −
-    # 따옴표 계열
-    '\u2018': "'",   # left single quote '
-    '\u2019': "'",   # right single quote '
-    '\uFF07': "'",   # 전각 apostrophe ＇
-    '\u02BC': "'",   # modifier letter apostrophe ʼ
-    # 공백 계열
-    '\u3000': ' ',   # 전각 공백
-    '\u00A0': ' ',   # non-breaking space
-    '\u200B': '',    # zero-width space (제거)
-    '\uFEFF': '',    # BOM (제거)
-    # 점 계열
-    '\uFF0E': '.',   # 전각 마침표 ．
-    '\u3002': '.',   # 중국어 마침표 。
-    # 밑줄 계열
-    '\uFF3F': '_',   # 전각 밑줄 ＿
-})
-
-def normalize_nickname(name: str) -> str:
-    """유니코드 유사 문자를 ASCII로 정규화하고 앞뒤 공백 제거."""
-    return name.translate(CHAR_NORMALIZE).strip()
-
-
-# ────────────────────────────────────────────
-# 이미지 전처리
-# ────────────────────────────────────────────
-def preprocess_image(image_bytes: bytes) -> bytes:
-    """
-    OCR 인식률 향상을 위한 이미지 전처리.
-    - 해상도가 낮으면 2배 업스케일 (LANCZOS)
-    - 대비(Contrast) 강화
-    - 샤프닝(Sharpness) 강화
-    반환값: 처리된 이미지의 PNG bytes
-    """
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-
-    # 해상도가 작으면 업스케일
-    if img.width < 1280:
-        new_w = img.width * 2
-        new_h = img.height * 2
-        img = img.resize((new_w, new_h), Image.LANCZOS)
-
-    # 대비 강화 (1.0 = 원본, 1.5 = 50% 강화)
-    img = ImageEnhance.Contrast(img).enhance(1.4)
-
-    # 샤프닝
-    img = ImageEnhance.Sharpness(img).enhance(2.0)
-
-    # 미세 샤프 필터 (엣지 강조)
-    img = img.filter(ImageFilter.SHARPEN)
-
-    out = io.BytesIO()
-    img.save(out, format="PNG", optimize=True)
-    return out.getvalue()
 
 
 # ────────────────────────────────────────────
@@ -252,13 +181,9 @@ class LobbyScan(commands.Cog):
         반환값: [[팀1닉1, 팀1닉2, ...], [팀2닉1, ...], ...]
         팀 구분이 불가능하면 전체를 하나의 팀으로 묶어 반환.
         """
-        # 전처리: 대비/샤프닝/업스케일
-        processed = preprocess_image(image_bytes)
-
         prompt = (
             "이터널 리턴 대기창 스크린샷이다.\n"
-            "화면에 보이는 팀을 구분하여 각 팀의 플레이어 닉네임을 정확히 출력하라.\n"
-            "\n"
+            "화면에 보이는 팀을 구분하여 각 팀의 플레이어 닉네임을 출력하라.\n"
             "출력 형식(예시, 팀 수·인원 수는 실제에 맞게):\n"
             "팀1\n"
             "닉네임A\n"
@@ -273,13 +198,10 @@ class LobbyScan(commands.Cog):
             "규칙:\n"
             "- '팀N' 헤더 다음 줄부터 해당 팀 닉네임을 한 줄에 하나씩 나열.\n"
             "- 팀 사이에 반드시 빈 줄 하나.\n"
-            "- 닉네임에 포함된 특수문자(-_.'!?)를 절대 변경하거나 생략하지 말 것.\n"
-            "  예) 'Jung-in' → 'Jung-in' 그대로, 'Player.exe' → 'Player.exe' 그대로.\n"
-            "- 한글·영문·숫자·특수문자 모두 화면에 보이는 그대로 출력.\n"
             "- 닉네임 외 설명·번호·기호 절대 금지.\n"
             "- 팀 구분이 불가능하면 '팀1' 하나로 전부 묶어 출력."
         )
-        image_b64 = base64.b64encode(processed).decode("utf-8")
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
         res = self.gemini.models.generate_content(
             model="models/gemini-3-flash-preview",
             contents=[
@@ -300,12 +222,13 @@ class LobbyScan(commands.Cog):
             if hasattr(part, "text") and part.text
         ).strip()
 
-        print(f"[OCR 원본 응답]\n{text}\n{'-'*30}")
+        # print(f"[OCR 원본 응답]\n{text}\n{'-'*30}")
         return _parse_teams(text)
 
     # ── ER API ──────────────────────────────────
     async def get_user_id(self, session: aiohttp.ClientSession, nickname: str) -> str | None:
         if nickname in self._userid_cache:
+            # print(f"[캐시 HIT] userId: {nickname!r} → {self._userid_cache[nickname]}")
             return self._userid_cache[nickname]
 
         headers = {"x-api-key": ER_KEY}
@@ -317,10 +240,9 @@ class LobbyScan(commands.Cog):
                 params={"query": nickname}
             ) as r:
                 body = await r.json()
+                # print(f"[닉네임 조회] {nickname!r} → status={r.status}, body={body}")
                 if r.status == 429:
-                    await asyncio.sleep(1)
-                    continue
-                if r.status in (500, 502, 503):
+                    # print(f"  └─ 429 Too Many Requests, {attempt}/{MAX_RETRY_429} 재시도 대기 1초...")
                     await asyncio.sleep(1)
                     continue
                 if r.status != 200:
@@ -330,11 +252,13 @@ class LobbyScan(commands.Cog):
                     self._userid_cache[nickname] = user_id
                 return user_id
 
+        # print(f"[FAIL] {nickname!r}: 429 재시도 초과")
         return None
 
     async def get_rank(self, session: aiohttp.ClientSession, user_id: str) -> dict | None:
         cached = self._get_rank_cache(user_id)
         if cached is not None:
+            # print(f"[캐시 HIT] rank: userId={user_id}")
             return cached
 
         headers = {"x-api-key": ER_KEY}
@@ -345,10 +269,9 @@ class LobbyScan(commands.Cog):
                 headers=headers
             ) as r:
                 body = await r.json()
+                # print(f"[랭크 조회] userId={user_id} → status={r.status}, body={body}")
                 if r.status == 429:
-                    await asyncio.sleep(1)
-                    continue
-                if r.status in (500, 502, 503):
+                    # print(f"  └─ 429 Too Many Requests, {attempt}/{MAX_RETRY_429} 재시도 대기 1초...")
                     await asyncio.sleep(1)
                     continue
                 if r.status != 200:
@@ -358,32 +281,23 @@ class LobbyScan(commands.Cog):
                     self._set_rank_cache(user_id, user_rank)
                 return user_rank
 
+        # print(f"[FAIL] rank userId={user_id}: 429 재시도 초과")
         return None
 
     async def get_user_data(self, session: aiohttp.ClientSession, nickname: str) -> dict:
         """항상 dict 반환. 비공개/언랭/실패 모두 포함."""
         if HIDDEN_NAME_RE.match(nickname):
+            # print(f"[비공개] {nickname!r}")
             return {"nickname": nickname, "tier": None, "mmr": None, "rank": None, "hidden": True}
 
-        # 1차 시도: 원본 닉네임
         user_id = await self.get_user_id(session, nickname)
-
-        # 2차 시도: 정규화된 닉네임 (특수문자 치환 후 다를 때만)
         if not user_id:
-            normalized = normalize_nickname(nickname)
-            if normalized != nickname:
-                print(f"[폴백] {nickname!r} → {normalized!r} 로 재시도")
-                user_id = await self.get_user_id(session, normalized)
-                if user_id:
-                    # 정규화된 이름으로도 캐시 등록
-                    self._userid_cache[nickname] = user_id
-
-        if not user_id:
-            print(f"[FAIL] {nickname!r}: userId 없음")
+            # print(f"[FAIL] {nickname!r}: userId 없음")
             return {"nickname": nickname, "tier": None, "mmr": None, "rank": None, "hidden": False}
 
         rank_data = await self.get_rank(session, user_id)
         if not rank_data or not rank_data.get("rank"):
+            # print(f"[언랭] {nickname!r}")
             return {"nickname": nickname, "tier": "Unranked", "mmr": 0, "rank": None, "hidden": False}
 
         mmr  = rank_data.get("mmr", 0)
@@ -391,7 +305,7 @@ class LobbyScan(commands.Cog):
         snum = _season_num(CURRENT_SEASON_NUM)
         tier = _calc_tier(mmr, rank, snum)
 
-        print(f"[OK] {nickname!r} → tier={tier}, mmr={mmr}, rank={rank}")
+        # print(f"[OK] {nickname!r} → tier={tier}, mmr={mmr}, rank={rank}, season_num={snum}")
         return {"nickname": nickname, "tier": tier, "mmr": mmr, "rank": rank, "hidden": False}
 
     # ── Command ─────────────────────────────────
@@ -435,6 +349,7 @@ class LobbyScan(commands.Cog):
         print(f"[인식] 총={len(all_names)}, 팀={len(teams)}, 비공개={hidden_count}, API 필요={need_api}")
 
         # ── ER API 순차 조회 ──
+        # teams 구조를 유지하며 result도 팀별로 수집
         team_results: list[list[dict]] = []
         api_done = 0
 
@@ -466,7 +381,7 @@ class LobbyScan(commands.Cog):
             team_lines = []
             for r in team_data:
                 if r["hidden"]:
-                    team_lines.append("> 닉네임 비공개")
+                    team_lines.append("> 닉네임 비공개") # 𒄬
                 elif r["tier"] is None:
                     fail_names.append("> "+r["nickname"])
                     team_lines.append(f"> ~~{r['nickname']}~~ — 조회 실패")
@@ -508,7 +423,17 @@ class LobbyScan(commands.Cog):
 def _parse_teams(text: str) -> list[list[str]]:
     """
     Gemini가 반환한 팀 구분 텍스트를 파싱하여 list[list[str]] 로 변환.
-    파싱 후 각 닉네임에 normalize_nickname() 적용.
+
+    기대 형식:
+        팀1
+        닉네임A
+        닉네임B
+
+        팀2
+        닉네임C
+        ...
+
+    '팀N' 헤더가 없으면 전체를 하나의 팀으로 묶는다.
     """
     TEAM_HEADER_RE = re.compile(r"^팀\s*\d+$")
     teams: list[list[str]] = []
@@ -523,16 +448,15 @@ def _parse_teams(text: str) -> list[list[str]]:
                 teams.append(current)
             current = []
         else:
-            cleaned = normalize_nickname(line)
-            if len(cleaned) > 1:
-                current.append(cleaned)
+            if len(line) > 1:
+                current.append(line)
 
     if current:
         teams.append(current)
 
     # 팀 헤더가 전혀 없으면 전체를 하나의 팀으로
     if not teams:
-        names = [normalize_nickname(l) for l in text.splitlines() if len(normalize_nickname(l)) > 1]
+        names = [l.strip() for l in text.splitlines() if len(l.strip()) > 1]
         if names:
             teams = [names]
 
