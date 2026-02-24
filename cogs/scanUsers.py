@@ -507,28 +507,41 @@ class LobbyScan(commands.Cog):
         return corrections
 
     # ── ER API ──────────────────────────────────
-    async def get_user_id(self, session: aiohttp.ClientSession, nickname: str) -> str | None:
+    async def get_user_id(self, session, nickname):
         if nickname in self._userid_cache:
             return self._userid_cache[nickname]
 
         headers = {"x-api-key": ER_KEY}
-        for _ in range(MAX_RETRY_429):
+        for attempt in range(MAX_RETRY_429):
             await self.rl.wait()
             async with session.get(
                 f"{ER_BASE}/user/nickname",
                 headers=headers,
                 params={"query": nickname}
             ) as r:
-                body = await r.json()
                 if r.status == 429:
-                    await asyncio.sleep(1)
+                    wait = 2 ** attempt  # 지수 백오프: 1초 → 2초 → 4초
+                    print(f"[429] {nickname!r} 재시도 {attempt+1}/{MAX_RETRY_429}, {wait}초 대기")
+                    await asyncio.sleep(wait)
                     continue
+                
+                body = await r.json()
+                
                 if r.status != 200:
+                    print(f"[API 실패] {nickname!r}: status={r.status}, body={body}")
                     return None
+                
                 user_id = body.get("user", {}).get("userId")
-                if user_id:
+                
+                # ← 핵심 수정: userId=0도 유효한 값으로 처리
+                if user_id is not None:
                     self._userid_cache[nickname] = user_id
-                return user_id
+                    return user_id
+                
+                print(f"[userId 없음] {nickname!r}: body={body}")
+                return None
+        
+        print(f"[429 한도 초과] {nickname!r}: {MAX_RETRY_429}회 재시도 모두 실패")
         return None
 
     async def get_rank(self, session: aiohttp.ClientSession, user_id: str) -> dict | None:
@@ -579,11 +592,11 @@ class LobbyScan(commands.Cog):
     @commands.command(name="대기분석", aliases=["ㄷㄱㅂㅅ"])
     async def lobby_scan(self, ctx):
         if not ctx.message.attachments:
-            await ctx.reply("이미지 첨부 필요")
+            await ctx.send("이미지 첨부 필요")
             return
 
         image_bytes = await ctx.message.attachments[0].read()
-        msg = await ctx.reply("🔍 이미지 분석중...")
+        msg = await ctx.send("🔍 이미지 분석중...")
         print(f"\n{'='*40}\n[대기분석 시작] by {ctx.author}\n{'='*40}")
 
         # ── Gemini OCR (팀 구분 + 좌표 추출) ──
