@@ -365,7 +365,7 @@ class LobbyScan(commands.Cog):
         """전처리된 이미지 bytes를 받아 Gemini에 전달하고 텍스트 응답 반환."""
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
         res = self.gemini.models.generate_content(
-            model="models/gemini-2.5-pro-preview-06-05",
+            model="models/gemini-3-pro-preview",
             contents=[
                 types.Content(
                     role="user",
