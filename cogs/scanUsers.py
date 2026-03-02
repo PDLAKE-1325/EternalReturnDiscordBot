@@ -365,7 +365,7 @@ class LobbyScan(commands.Cog):
         """전처리된 이미지 bytes를 받아 Gemini에 전달하고 텍스트 응답 반환."""
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
         res = self.gemini.models.generate_content(
-            model="models/gemini-3-pro-preview",
+            model="models/gemini-3-flash-preview",
             contents=[
                 types.Content(
                     role="user",
@@ -619,7 +619,7 @@ class LobbyScan(commands.Cog):
             preview_lines.append(f"── 팀 {i} ──")
             for e in team:
                 lock    = "  🔒" if HIDDEN_NAME_RE.match(e["name"]) else ""
-                has_box = " 📍" if e["box"] else ""
+                has_box = "" #❖" if e["box"] else ""
                 preview_lines.append(f"• {e['name']}{lock}{has_box}")
         names_preview = "\n".join(preview_lines)
 

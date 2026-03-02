@@ -1,7 +1,7 @@
 # cogs/help.py
 import discord
 from discord.ext import commands
-from datetime import datetime
+from datetime import datetimeㄴ
 
 
 PAGES = {
@@ -27,7 +27,7 @@ PAGES = {
         "emoji": "⚙️",
         "color": 0xEB459E,
         "commands": [
-            ("ㅇ도움", "이 도움말을 표시합니다", "\n> 단축: ㅇㄷㅇ"),
+            ("ㅇ도움", "이 도움말을 표시합니다", ""),
         ],
     },
 }
@@ -152,7 +152,7 @@ class HelpCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.command(name="도움", aliases=["ㄷㅇ"])
+    @commands.command(name="도움")
     async def record_help(self, ctx: commands.Context):
         embed = build_main_embed(self.bot.user)
         view = MainView(self.bot.user, author_id=ctx.author.id)  # 실행자 ID 전달
