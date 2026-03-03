@@ -140,7 +140,21 @@ class UnionTeamCog(commands.Cog):
         data = await self._get(f"{ER_BASE}/user/nickname", query=nickname)
         return data["user"]["userId"] if data and data.get("user") else None
 
-
+    def get_tier(self, tier_score: int) -> str:
+        if tier_score >= 70:
+            return "S" * ((tier_score-70) // 10 + 1)
+        elif tier_score >= 60:
+            return "A" * (tier_score%10 // 3 + 1)
+        elif tier_score >= 50:
+            return "B" * (tier_score%10 // 3 + 1)
+        elif tier_score >= 40:
+            return "C" * (tier_score%10 // 3 + 1)
+        elif tier_score >= 30:
+            return "D" * (tier_score%10 // 3 + 1)
+        elif tier_score >= 10:
+            return "F" * (tier_score%10 // 3 + 1)
+        else:
+            return "Unknown"
 
     async def fetch_union_teams(self, user_id: str, season_id: int) -> List[Dict]:
         data = await self._get(f"{ER_BASE}/unionTeam/uid/{user_id}/{season_id}")
@@ -177,7 +191,7 @@ class UnionTeamCog(commands.Cog):
     def build_embed(self, season_entry: Dict, nickname: str) -> discord.Embed:
         season_id = season_entry["seasonID"]
         teams     = season_entry.get("_teams") or []
-        games     = season_entry.get("_games") or []
+        # games     = season_entry.get("_games") or []
         is_cur    = season_entry.get("isCurrent", 0) == 1
 
         embed = discord.Embed(
@@ -194,8 +208,7 @@ class UnionTeamCog(commands.Cog):
         if teams:
             for team in teams:
                 t_name = team.get("tnm", "Unknown")
-                tier = team.get("ti", "")
-                top_tier = team.get("ssti", "")
+                tier = self.get_tier(team.get("ti", 0))
 
                 total_wins = sum(team.get(k, 0) for _, k in WIN_TIER_KEYS)
 
@@ -207,26 +220,26 @@ class UnionTeamCog(commands.Cog):
                 wins_row = " · ".join(wins_parts) if wins_parts else "기록 없음"
 
                 lines = [
-                    f"팀명 : **{t_name}**",
-                    f"현재 티어: **{tier}** | 최고 티어: **{top_tier}**",
+                    f"> 팀명 : **{t_name}**",
+                    f"> 티어: **{tier}**",
                     # f"티켓 — S: `{team.get('stt',0)}` "
                     # f"SS: `{team.get('sstt',0)}` "
                     # f"SSS: `{team.get('ssstt',0)}`",
-                    f"총 승리: **{total_wins}승**",
-                    wins_row,
+                    f"> 총 승리: **{total_wins}승**",
+                    # wins_row,
                 ]
 
                 cdt, udt = team.get("cdt", 0), team.get("udt", 0)
                 if cdt and udt:
                     lines.append(
-                        f"팀 생성: {datetime.fromtimestamp(cdt/1000):%Y.%m.%d} | "
+                        f"> 팀 생성: {datetime.fromtimestamp(cdt/1000):%Y.%m.%d}\n"
                         f"-# 업데이트: {datetime.fromtimestamp(udt/1000):%Y.%m.%d %H:%M}"
                     )
 
                 embed.add_field(name="**팀 정보**", value="\n".join(lines), inline=False)
         else:
             embed.add_field(name="**팀 정보**", value="유니온 팀 없음 (탈퇴/미가입)", inline=False)
-            
+
         embed.set_footer(text="이리와 봇 · 유니온 팀 정보")
         return embed
 
