@@ -15,11 +15,11 @@ class ERAccountCog(commands.Cog):
     # 닉네임 등록
     # ──────────────────────────────
     @commands.command(name="등록")
-    async def register_nickname(self, ctx, *, nickname: str):
+    async def register_nickname(self, ctx, *, nickname: str = None):
         user_id = str(ctx.author.id)
         session = SessionLocal()
 
-        if not nickname or not nickname.strip():
+        if not nickname:
             return await ctx.reply(embed=discord.Embed(
                 title="❌ 오류",
                 description="`ㅇ등록 [닉네임]` 형식으로 닉네임을 입력해주세요.",

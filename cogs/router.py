@@ -69,7 +69,7 @@ class MessageRouter(commands.Cog):
     # ──────────────────────────────────────────────────────
     @commands.command(name="봇채널설정")
     @commands.has_permissions(administrator=True)
-    async def set_bot_channel(self, ctx: commands.Context, channel: discord.TextChannel = None):
+    async def set_bot_channel(self, ctx: commands.Context, channel: discord.TextChannel):
         if channel.guild.id != ctx.guild.id:
             return await ctx.reply("❌ 해당 서버에 존재하는 채널만 설정할 수 있습니다.")
         
@@ -147,11 +147,29 @@ class MessageRouter(commands.Cog):
     @remove_bot_channel.error
     async def channel_command_error(self, ctx: commands.Context, error):
         if isinstance(error, commands.MissingPermissions):
-            await ctx.reply("❌ 관리자 권한이 필요합니다.")
+            await ctx.reply(embed=discord.Embed(
+                title="❌ 오류",
+                description="관리자 권한이 필요합니다.",
+                color=0xFF6B6B,
+            ))
         elif isinstance(error, commands.BadArgument):
-            await ctx.reply("❌ 올바른 채널을 입력해주세요. (`ㅇ봇채널설정 #채널명`)")
+            await ctx.reply(embed=discord.Embed(
+                title="❌ 오류",
+                description="`ㅇ봇채널설정 #채널명` 형식으로 채널을 입력해주세요.",
+                color=0xFF6B6B,
+            ))
+        elif isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply(embed=discord.Embed(
+                title="❌ 오류",
+                description="`ㅇ봇채널설정 #채널명` 형식으로 채널명을 입력해주세요.",
+                color=0xFF6B6B,
+            ))
         else:
-            await ctx.reply(f"오류가 발생했습니다: {error}")
+            await ctx.reply(embed=discord.Embed(
+                title="❌ 오류",
+                description=f"기타 에러: {error}",
+                color=0xFF6B6B,
+            ))
 
 
 async def setup(bot):

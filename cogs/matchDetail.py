@@ -117,7 +117,7 @@ class MatchDetailCog(commands.Cog):
         return embed
 
     @commands.command(name="매치", aliases=["ㅁㅊ"])
-    async def match_detail(self, ctx: commands.Context, game_id: int):
+    async def match_detail(self, ctx: commands.Context, game_id: int = None):
         """특정 게임의 상세 정보 조회"""
         
         if not game_id:

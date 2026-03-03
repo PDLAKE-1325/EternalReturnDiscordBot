@@ -6,6 +6,7 @@ https://developer.eternalreturn.io/static/media/OpenAPI_KR_20251118.html#_%EC%86
 - ㅇ매치 등수 가독성좀
 - ㅇㅊㄱㄱ, ㅇㅈㅈ 개선 (가독성, 정보)
 - 여러 팀 찾는 곳에서 본인 팀 강조
-- ㅇㄷㄱㅂㅅ 박스체그 테스트
-- ㅇ등록 닉네임 공백 에러 메시지체크 + ㅇ매치
-- chennel none추가한거 에러체크
+
+- ㅇ등록 닉네임 공백 optional + ㅇ매치
+
+- chennel missing anjtlrl wkrehd cprm 미싱 리콰이어먼트 고침
