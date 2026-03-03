@@ -56,7 +56,7 @@ class MatchDetailCog(commands.Cog):
         
         return f"{mtm} {mm}매치"
 
-    def create_team_embeds(self, all_players: list) -> list:
+    def create_team_embed(self, all_players: list) -> discord.Embed:
         """팀별 플레이어를 임베드로 생성"""
         teams = {}
         
@@ -67,59 +67,51 @@ class MatchDetailCog(commands.Cog):
                 teams[team_num] = []
             teams[team_num].append(player)
         
-        embeds = []
-        
+        embed = discord.Embed(
+            # title=f"팀 {team_num}",
+            title=f"매치 상세 정보",
+            color=0x5865F2,
+            timestamp=datetime.now()
+        )
+
         for team_num in sorted(teams.keys()):
             players = teams[team_num]
             
-            embed = discord.Embed(
-                title=f"팀 {team_num}",
-                color=0x5865F2,
-                timestamp=datetime.now()
-            )
-            
             # 팀 전체 통계
             team_kills = sum(p.get("playerKill", 0) for p in players)
-            team_deaths = sum(p.get("totalDeaths", 0) for p in players)
             team_rank = players[0].get("gameRank", 0) if players else 0
-            
-            embed.add_field(
-                name="팀 통계",
-                value=f"최종 순위: **{team_rank}등** | 킬: **{team_kills}** | 데스: **{team_deaths}**",
-                inline=False
-            )
-            
+
+            players_info = []
+
             # 각 플레이어 정보
             for player in players:
                 char_name = self.get_character_name(player.get("characterNum", 0))
                 nickname = player.get("nickname", "Unknown")
-                rank = player.get("gameRank", 0)
+                # rank = player.get("gameRank", 0)
                 kill = player.get("playerKill", 0)
                 assist = player.get("playerAssistant", 0)
                 death = player.get("totalDeaths", 0)
-                level = player.get("characterLevel", 0)
+                # level = player.get("characterLevel", 0)
                 damage = player.get("damageToPlayer", 0)
-                
                 best_weapon = player.get("bestWeapon", 0)
                 weapon_name = self.get_weapon_name(best_weapon)
-                
+
                 player_info = (
-                    f"**{nickname}** (Lv.{level})\n"
-                    f"{char_name} | {weapon_name}\n"
-                    f"K/A/D: {kill}/{assist}/{death} | "
-                    f"피해: {damage:,} | "
-                    f"**{rank}등**"
+                    f"> **{nickname}** | {char_name}({weapon_name})\n"
+                    f"> K/D/A: {kill}/{death}/{assist} | 딜량: {damage:,}"
                 )
-                
-                embed.add_field(
-                    name="",
-                    value=player_info,
-                    inline=False
-                )
+
+                players_info.append(player_info)
             
-            embeds.append(embed)
-        
-        return embeds
+            
+
+            embed.add_field(
+                name=f"팀 {team_num:02d}",
+                value=f"최종 순위: **{team_rank}등** | TK: **{team_kills}**\n" + "\n".join(players_info),
+                inline=False
+            )
+            
+        return embed
 
     @commands.command(name="매치", aliases=["ㅁㅊ"])
     async def match_detail(self, ctx: commands.Context, game_id: int):
@@ -172,13 +164,13 @@ class MatchDetailCog(commands.Cog):
                 inline=True
             )
             
-            main_embed.set_footer(text=f"이리와 봇 · 매치 상세 정보")
+            main_embed.set_footer(text=f"이리와 봇 · 매치 상세 정보 | 게임 ID: {game_id}")
             
             # 팀별 임베드 생성
-            team_embeds = self.create_team_embeds(game_data)
+            team_embeds = self.create_team_embed(game_data)
             
             # 모든 임베드를 하나로 합치기 (max 10)
-            all_embeds = [main_embed] + team_embeds[:9]
+            all_embeds = [main_embed] + team_embeds
             
             await loading_msg.edit(content=None, embeds=all_embeds)
             

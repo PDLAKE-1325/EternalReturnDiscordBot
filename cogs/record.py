@@ -309,7 +309,7 @@ class RecordCog(commands.Cog):
                 inline=False
             )
             
-            embed.set_footer(text="이리와 봇 - 전적")
+            embed.set_footer(text="이리와 봇 · 전적")
             
             # 가장 많이 플레이한 캐릭터 이미지 설정
             # img_path = self.get_character_image_path(most_played_char)[most_played_skin]
@@ -441,7 +441,7 @@ class RecordCog(commands.Cog):
                 name="⏱ 게임 정보",
                 value=(
                     f"**플레이 시간:** {self.format_duration(game['playTime'])}\n"
-                    f"**생존 시간:** {self.format_duration(game['survivableTime'])}\n"
+                    f"**추가된 봇 수:** {game['botAdded']}\n"
                     f"**몬스터 처치:** {game['monsterKill']}"
                 ),
                 inline=True
@@ -498,7 +498,7 @@ class RecordCog(commands.Cog):
                 inline=False
             )
 
-            embed.set_footer(text=f"이리와 봇 - 최근 게임 | 게임 ID: {game['gameId']}")
+            embed.set_footer(text=f"이리와 봇 · 최근 게임 | 게임 ID: {game['gameId']}")
             
             # 플레이한 캐릭터 이미지 설정
             # img_path = self.get_character_image_path(game["characterNum"])[game["skinCode"]%100]

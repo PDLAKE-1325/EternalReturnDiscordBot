@@ -212,21 +212,10 @@ class UnionTeamCog(commands.Cog):
 
                 total_wins = sum(team.get(k, 0) for _, k in WIN_TIER_KEYS)
 
-                wins_parts = [
-                    f"`{label}` {team.get(key, 0)}승"
-                    for label, key in WIN_TIER_KEYS
-                    if team.get(key, 0)
-                ]
-                wins_row = " · ".join(wins_parts) if wins_parts else "기록 없음"
-
                 lines = [
                     f"> 팀명 : **{t_name}**",
                     f"> 티어: **{tier}**",
-                    # f"티켓 — S: `{team.get('stt',0)}` "
-                    # f"SS: `{team.get('sstt',0)}` "
-                    # f"SSS: `{team.get('ssstt',0)}`",
                     f"> 총 승리: **{total_wins}승**",
-                    # wins_row,
                 ]
 
                 cdt, udt = team.get("cdt", 0), team.get("udt", 0)
@@ -282,7 +271,7 @@ class UnionTeamCog(commands.Cog):
             view  = UnionSeasonView(self, author_id, nickname, seasons)
 
             await loading.delete()
-            msg = await ctx.send(embed=embed, view=view)
+            msg = await ctx.reply(embed=embed, view=view)
             view.message = msg
 
         except Exception as e:
