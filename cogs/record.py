@@ -297,7 +297,7 @@ class RecordCog(commands.Cog):
                 
                 game_info = (
                     f"**{result}**[{game_type}]\n"
-                    f"> **{char_name}**-{weapon_name}\n"
+                    f"> **{char_name}** · {weapon_name}\n"
                     f"> TK/K/D/A : {tk}/{kills}/{game.get('playerDeaths', 0)}/{assists}"
                 )
                 recent_games.append(game_info)

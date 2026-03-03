@@ -97,8 +97,8 @@ class MatchDetailCog(commands.Cog):
                 weapon_name = self.get_weapon_name(best_weapon)
 
                 player_info = (
-                    f"> **{nickname}** | {char_name}({weapon_name})\n"
-                    f"> K/D/A: {kill}/{death}/{assist} | 딜량: {damage:,}"
+                    f"> `{nickname}` | {char_name} · {weapon_name}\n"
+                    f"> -# K/D/A: {kill}/{death}/{assist} | 딜량: {damage:,}"
                 )
 
                 players_info.append(player_info)
@@ -110,6 +110,9 @@ class MatchDetailCog(commands.Cog):
                 value=f"최종 순위: **{team_rank}등** | TK: **{team_kills}**\n" + "\n".join(players_info),
                 inline=False
             )
+
+            if team_num % 2 == 0:
+                embed.add_field(name="\u200b", value="\u200b", inline=True)
             
         return embed
 

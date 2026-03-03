@@ -675,18 +675,18 @@ class LobbyScan(commands.Cog):
                         team_lines.append("> 닉네임 비공개")
                     elif r["tier"] is None:
                         _fail.append(r["nickname"])
-                        team_lines.append(f"> ~~{r['nickname']}~~ | 조회 실패")
+                        team_lines.append(f"> ~~{r['nickname']}~~ · 조회 실패")
                     elif r["tier"] == "Unranked":
-                        team_lines.append(f"> {r['nickname']} | {tier_display('Unranked')}")
+                        team_lines.append(f"> {r['nickname']} · {tier_display('Unranked')}")
                         _ok += 1
                     else:
                         if r["tier"] == "이터니티":
                             team_lines.append(
-                                f"> {r['nickname']} | {tier_display(r['tier'])} #{r['rank']:,}"
+                                f"> {r['nickname']} · {tier_display(r['tier'])} #{r['rank']:,}"
                             )
                         else:
                             team_lines.append(
-                                f"> {r['nickname']} | {tier_display(r['tier'])}"
+                                f"> {r['nickname']} · {tier_display(r['tier'])}"
                             )
                         _ok += 1
                 embed.add_field(
