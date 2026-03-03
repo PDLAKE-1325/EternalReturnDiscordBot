@@ -60,7 +60,7 @@ class MessageRouter(commands.Cog):
         await self.bot.process_commands(message)
 
     # ──────────────────────────────────────────────────────
-    # !봇채널설정 <#채널>
+    # ㅇ봇채널설정 <#채널>
     # ──────────────────────────────────────────────────────
     @commands.command(name="봇채널설정")
     @commands.has_permissions(administrator=True)
@@ -99,7 +99,7 @@ class MessageRouter(commands.Cog):
             session.close()
 
     # ──────────────────────────────────────────────────────
-    # !봇채널제거
+    # ㅇ봇채널제거
     # ──────────────────────────────────────────────────────
     @commands.command(name="봇채널제거")
     @commands.has_permissions(administrator=True)
@@ -137,7 +137,7 @@ class MessageRouter(commands.Cog):
         if isinstance(error, commands.MissingPermissions):
             await ctx.reply("❌ 관리자 권한이 필요합니다.")
         elif isinstance(error, commands.BadArgument):
-            await ctx.reply("❌ 올바른 채널을 입력해주세요. (예: `!봇채널설정 #채널명`)")
+            await ctx.reply("❌ 올바른 채널을 입력해주세요. (예: `ㅇ봇채널설정 #채널명`)")
         else:
             await ctx.reply(f"오류가 발생했습니다: {error}")
 

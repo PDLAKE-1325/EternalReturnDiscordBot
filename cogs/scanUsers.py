@@ -36,7 +36,6 @@ HYPHEN_VARIANTS = [
 ]
 
 # ── 좌표 파싱 정규식 ─────────────────────────
-# "닉네임A [123, 456, 150, 580]" 형태 파싱
 COORD_LINE_RE = re.compile(
     r"^(.*?)\s*\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]\s*$"
 )
@@ -60,10 +59,33 @@ def _hyphen_variants(nickname: str) -> list[str]:
 
 
 # ────────────────────────────────────────────
+# ★ 박스 충돌 검사
+# ────────────────────────────────────────────
+def _boxes_overlap(box1: list[int], box2: list[int]) -> bool:
+    """box 형식: [ymin, xmin, ymax, xmax] (0~1000 정규화 좌표)"""
+    ymin1, xmin1, ymax1, xmax1 = box1
+    ymin2, xmin2, ymax2, xmax2 = box2
+    return not (xmax1 <= xmin2 or xmax2 <= xmin1 or ymax1 <= ymin2 or ymax2 <= ymin1)
+
+
+def _build_forbidden_names(
+    target_name: str,
+    target_box: list[int],
+    all_ocr_entries: list[dict],
+) -> set[str]:
+    """target_box와 겹치는 다른 플레이어의 OCR 닉네임 집합을 반환한다."""
+    return {
+        e["name"]
+        for e in all_ocr_entries
+        if e["name"] != target_name and e["box"] is not None
+        and _boxes_overlap(target_box, e["box"])
+    }
+
+
+# ────────────────────────────────────────────
 # 이미지 전처리 (밝기/대비/채도/선명도)
 # ────────────────────────────────────────────
 def _preprocess_image(image_bytes: bytes) -> bytes:
-    """OCR 정확도 향상을 위한 전처리. PNG bytes 반환."""
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = ImageEnhance.Brightness(img).enhance(0.70)
     img = ImageEnhance.Contrast(img).enhance(1.50)
@@ -83,46 +105,29 @@ def _crop_nickname_region(
     padding_norm: int = 30,
     min_output_width: int = 500,
 ) -> bytes:
-    """
-    0~1000 정규화 좌표 [ymin, xmin, ymax, xmax] 로 닉네임 영역을 크롭한다.
-
-    Args:
-        padding_norm: 바운딩박스 주변 패딩 (0~1000 단위)
-        min_output_width: 결과 이미지 최소 너비 (픽셀). 작으면 업스케일.
-    Returns:
-        전처리된 크롭 PNG bytes
-    """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     w, h = img.size
 
     ymin_n, xmin_n, ymax_n, xmax_n = box
-
-    # 패딩 적용 및 범위 클램프
     ymin_n = max(0, ymin_n - padding_norm)
     xmin_n = max(0, xmin_n - padding_norm)
     ymax_n = min(1000, ymax_n + padding_norm)
     xmax_n = min(1000, xmax_n + padding_norm)
 
-    # 픽셀 변환
     x0 = int(xmin_n / 1000 * w)
     y0 = int(ymin_n / 1000 * h)
     x1 = int(xmax_n / 1000 * w)
     y1 = int(ymax_n / 1000 * h)
 
-    # 영역이 너무 작으면 크롭 포기 → None 반환 신호
     if (x1 - x0) < 5 or (y1 - y0) < 5:
         raise ValueError(f"크롭 영역이 너무 작음: box={box}, px=({x0},{y0},{x1},{y1})")
 
     cropped = img.crop((x0, y0, x1, y1))
 
-    # 업스케일 (너비가 min_output_width 미만이면 확대)
     if cropped.width < min_output_width:
         scale = min_output_width / cropped.width
-        new_w = int(cropped.width  * scale)
-        new_h = int(cropped.height * scale)
-        cropped = cropped.resize((new_w, new_h), Image.LANCZOS)
+        cropped = cropped.resize((int(cropped.width * scale), int(cropped.height * scale)), Image.LANCZOS)
 
-    # 전처리 적용
     cropped = ImageEnhance.Brightness(cropped).enhance(0.70)
     cropped = ImageEnhance.Contrast(cropped).enhance(1.50)
     cropped = ImageEnhance.Color(cropped).enhance(0.00)
@@ -245,15 +250,9 @@ def tier_display(tier: str) -> str:
 
 
 # ────────────────────────────────────────────
-# OCR 응답 파서 (좌표 포함 버전)
+# OCR 응답 파서
 # ────────────────────────────────────────────
 def _parse_teams(text: str) -> list[list[dict]]:
-    """
-    Gemini가 반환한 팀 구분 텍스트를 파싱.
-    각 플레이어는 {"name": str, "box": [ymin,xmin,ymax,xmax] | None} 형태.
-
-    좌표가 없는 줄도 name만 추출해서 box=None으로 저장.
-    """
     TEAM_HEADER_RE = re.compile(r"^팀\s*(\d+)$")
     teams_numbered: dict[int, list[dict]] = {}
     current_num: int | None = None
@@ -264,7 +263,6 @@ def _parse_teams(text: str) -> list[list[dict]]:
         if not line:
             continue
 
-        # 팀 헤더 체크
         m_header = TEAM_HEADER_RE.match(line)
         if m_header:
             if current_num is not None and current:
@@ -273,7 +271,6 @@ def _parse_teams(text: str) -> list[list[dict]]:
             current = []
             continue
 
-        # 좌표 포함 줄 파싱
         m_coord = COORD_LINE_RE.match(line)
         if m_coord:
             name = m_coord.group(1).strip()
@@ -281,7 +278,6 @@ def _parse_teams(text: str) -> list[list[dict]]:
             if len(name) > 1 and current_num is not None:
                 current.append({"name": name, "box": box})
         else:
-            # 좌표 없는 줄 → name만 저장
             if len(line) > 1 and current_num is not None:
                 current.append({"name": line, "box": None})
 
@@ -289,7 +285,6 @@ def _parse_teams(text: str) -> list[list[dict]]:
         teams_numbered[current_num] = current
 
     if not teams_numbered:
-        # 헤더 구분 없이 닉네임만 쭉 나열된 경우
         entries = []
         for l in text.splitlines():
             l = l.strip()
@@ -305,7 +300,6 @@ def _parse_teams(text: str) -> list[list[dict]]:
                 entries.append({"name": l, "box": None})
         return [entries] if entries else []
 
-    # ── 환각 팀 번호 탐지 ──
     sorted_nums = sorted(teams_numbered.keys())
     if sorted_nums:
         expected_max = sorted_nums[0] + len(sorted_nums) - 1
@@ -323,7 +317,6 @@ def _parse_teams(text: str) -> list[list[dict]]:
 # RateLimiter
 # ────────────────────────────────────────────
 class RateLimiter:
-    """초당 1회 보장"""
     def __init__(self, rate_per_sec: float):
         self.interval = 1.0 / rate_per_sec
         self.lock = asyncio.Lock()
@@ -350,7 +343,6 @@ class LobbyScan(commands.Cog):
         self._userid_cache: dict[str, str]               = {}
         self._rank_cache:   dict[str, tuple[dict, float]] = {}
 
-    # ── 캐시 헬퍼 ──────────────────────────────
     def _get_rank_cache(self, user_id: str) -> dict | None:
         entry = self._rank_cache.get(user_id)
         if entry and (time.monotonic() - entry[1]) < RANK_CACHE_TTL:
@@ -360,9 +352,7 @@ class LobbyScan(commands.Cog):
     def _set_rank_cache(self, user_id: str, data: dict):
         self._rank_cache[user_id] = (data, time.monotonic())
 
-    # ── Gemini 호출 헬퍼 ────────────────────────
     def _gemini_call(self, prompt: str, image_bytes: bytes) -> str:
-        """전처리된 이미지 bytes를 받아 Gemini에 전달하고 텍스트 응답 반환."""
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
         res = self.gemini.models.generate_content(
             model="models/gemini-3-flash-preview",
@@ -384,13 +374,7 @@ class LobbyScan(commands.Cog):
             if hasattr(part, "text") and part.text
         ).strip()
 
-    # ── Gemini OCR (팀 구분 + 좌표 추출) ──────────
     def extract_teams_from_image(self, image_bytes: bytes) -> list[list[dict]]:
-        """
-        이미지에서 팀별 플레이어 목록을 추출한다.
-        각 플레이어: {"name": str, "box": [ymin, xmin, ymax, xmax] | None}
-        좌표는 이미지 전체를 0~1000으로 정규화한 정수.
-        """
         processed_bytes = _preprocess_image(image_bytes)
         prompt = (
             "이터널 리턴 대기창 스크린샷이다.\n"
@@ -412,7 +396,7 @@ class LobbyScan(commands.Cog):
             "- 닉네임과 좌표 외 설명·번호·기호 절대 금지.\n"
             "- 팀 구분이 불가능하면 '팀1' 하나로 전부 묶어 출력.\n\n"
             "닉네임 인식 주의사항:\n"
-            "- 하이픈 계열 문자(─, -, 一, –, —, −, － 등)는 이미지에 보이는 그대로 출력하라. 임의로 다른 하이픈으로 바꾸지 말 것.\n"
+            "- 하이픈 계열 문자(─, -, 一, –, —, −, － 등)는 이미지에 보이는 그대로 출력하라.\n"
             "- 대소문자를 정확히 구분하라.\n"
             "- 한국어의 이중 모음과 받침 구분에 주의하라.\n"
             "- OCR 혼동이 잦은 문자 쌍을 주의하라:\n"
@@ -420,18 +404,11 @@ class LobbyScan(commands.Cog):
             "  · 한글 초성: ㅈ↔ㅊ, ㄱ↔ㅋ, ㅂ↔ㅍ↔ㄹ↔ㅁ, ㅅ↔ㅆ, ㄷ↔ㄹ↔ㅌ\n"
         )
         text = self._gemini_call(prompt, processed_bytes)
-        # print(f"[OCR 원본 응답]\n{text}\n{'-'*30}")
         return _parse_teams(text)
 
-    # ── 동적 크롭 재질의 (단일 닉네임) ────────────
     def recheck_with_crop(
         self, image_bytes: bytes, name: str, box: list[int]
     ) -> list[str]:
-        """
-        닉네임 영역을 크롭해서 Gemini에 집중 재질의한다.
-        가능성 있는 닉네임 후보 리스트를 반환한다 (최대 4개).
-        실패 시 [name] (원래 이름) 반환.
-        """
         try:
             crop_bytes = _crop_nickname_region(image_bytes, box)
         except ValueError as e:
@@ -459,14 +436,9 @@ class LobbyScan(commands.Cog):
         candidates = [c.strip() for c in text.split("|+]") if c.strip()]
         return candidates if candidates else [name]
 
-    # ── 전체 이미지 재질의 (여러 닉네임, 폴백용) ──
     def recheck_failed_nicknames(
         self, image_bytes: bytes, failed_names: list[str]
     ) -> dict[str, list[str]]:
-        """
-        조회 실패한 닉네임 목록을 원본 이미지와 함께 Gemini에 재질의.
-        반환값: { 원래_닉네임: [후보1, 후보2, ...] }
-        """
         processed_bytes = _preprocess_image(image_bytes)
         names_str = "\n".join(f"- {n}" for n in failed_names)
         prompt = (
@@ -520,27 +492,21 @@ class LobbyScan(commands.Cog):
                 params={"query": nickname}
             ) as r:
                 if r.status == 429:
-                    wait = 2 ** attempt  # 지수 백오프: 1초 → 2초 → 4초
+                    wait = 2 ** attempt
                     print(f"[429] {nickname!r} 재시도 {attempt+1}/{MAX_RETRY_429}, {wait}초 대기")
                     await asyncio.sleep(wait)
                     continue
-                
                 body = await r.json()
-                
                 if r.status != 200:
                     print(f"[API 실패] {nickname!r}: status={r.status}, body={body}")
                     return None
-                
                 user_id = body.get("user", {}).get("userId")
-                
-                # ← 핵심 수정: userId=0도 유효한 값으로 처리
                 if user_id is not None:
                     self._userid_cache[nickname] = user_id
                     return user_id
-                
                 print(f"[userId 없음] {nickname!r}: body={body}")
                 return None
-        
+
         print(f"[429 한도 초과] {nickname!r}: {MAX_RETRY_429}회 재시도 모두 실패")
         return None
 
@@ -569,7 +535,6 @@ class LobbyScan(commands.Cog):
         return None
 
     async def get_user_data(self, session: aiohttp.ClientSession, nickname: str) -> dict:
-        """항상 dict 반환. tier/mmr/rank/hidden 포함. box는 호출자가 별도 관리."""
         if HIDDEN_NAME_RE.match(nickname):
             return {"nickname": nickname, "tier": None, "mmr": None, "rank": None, "hidden": True}
 
@@ -599,8 +564,6 @@ class LobbyScan(commands.Cog):
         msg = await ctx.send("🔍 이미지 분석중...")
         print(f"\n{'='*40}\n[대기분석 시작] by {ctx.author}\n{'='*40}")
 
-        # ── Gemini OCR (팀 구분 + 좌표 추출) ──
-        # teams: list[list[{"name": str, "box": list|None}]]
         ocr_teams: list[list[dict]] = await asyncio.to_thread(
             self.extract_teams_from_image, image_bytes
         )
@@ -618,9 +581,8 @@ class LobbyScan(commands.Cog):
         for i, team in enumerate(ocr_teams, 1):
             preview_lines.append(f"── 팀 {i} ──")
             for e in team:
-                lock    = "  🔒" if HIDDEN_NAME_RE.match(e["name"]) else ""
-                has_box = "" #❖" if e["box"] else ""
-                preview_lines.append(f"• {e['name']}{lock}{has_box}")
+                lock = "  🔒" if HIDDEN_NAME_RE.match(e["name"]) else ""
+                preview_lines.append(f"• {e['name']}{lock}")
         names_preview = "\n".join(preview_lines)
 
         await msg.edit(content=(
@@ -634,9 +596,6 @@ class LobbyScan(commands.Cog):
             f"비공개={hidden_count}, 좌표={box_count}, API 필요={need_api}"
         )
 
-        # ── ER API 순차 조회 ──
-        # team_results: list[list[dict]]
-        # 각 dict: get_user_data 결과 + "box" 키 추가
         team_results: list[list[dict]] = []
         api_done = 0
 
@@ -655,11 +614,10 @@ class LobbyScan(commands.Cog):
                             f"⧖ 전적 조회중... ({api_done} / {need_api}) — `{name}`"
                         ))
                     data = await self.get_user_data(session, name)
-                    data["box"] = box  # 좌표 보존
+                    data["box"] = box
                     tr.append(data)
                 team_results.append(tr)
 
-        # ── 임베드 빌더 ──
         def build_embed(results: list[list[dict]]) -> tuple[discord.Embed, int, list[str]]:
             embed = discord.Embed(
                 title="📊 대기창 분석 결과",
@@ -680,7 +638,7 @@ class LobbyScan(commands.Cog):
                         team_lines.append(f"> **`{r['nickname']}`**  · {tier_display('Unranked')}")
                         _ok += 1
                     else:
-                        if r["tier"] == "이터니티": #
+                        if r["tier"] == "이터니티":
                             team_lines.append(
                                 f"> **`{r['nickname']}`**  · {tier_display(r['tier'])} #{r['rank']:,}"
                             )
@@ -715,7 +673,7 @@ class LobbyScan(commands.Cog):
         print(f"[1차 완료] 팀={len(ocr_teams)}, 성공={ok_count}, 비공개={hidden_count}, 실패={len(fail_names)}")
 
         # ════════════════════════════════════════════
-        # 0단계: 하이픈 변형 시도 (Gemini 없음)
+        # 0단계: 하이픈 변형 시도
         # ════════════════════════════════════════════
         hyphen_targets = [
             (ti, pi, r)
@@ -751,7 +709,7 @@ class LobbyScan(commands.Cog):
                 await msg.edit(embed=embed)
 
         # ════════════════════════════════════════════
-        # 1단계: 동적 크롭 재질의 (box 있는 실패 닉네임)
+        # 1단계: 동적 크롭 재질의
         # ════════════════════════════════════════════
         crop_targets = [
             (ti, pi, r)
@@ -771,32 +729,39 @@ class LobbyScan(commands.Cog):
                     box      = r["box"]
                     tried    = tried_crop.setdefault(old_name, set())
 
-                    # Gemini 크롭 재질의 → 후보 목록
+                    # ★ 박스 충돌 검사: target box와 겹치는 다른 플레이어 이름은 후보에서 제외
+                    forbidden = _build_forbidden_names(old_name, box, all_ocr)
+                    if forbidden:
+                        print(f"[충돌 금지목록] {old_name!r}: {forbidden}")
+
                     crop_candidates: list[str] = await asyncio.to_thread(
                         self.recheck_with_crop, image_bytes, old_name, box
                     )
-                    print(f"[크롭 재질의] {old_name!r} → 후보: {crop_candidates}")
 
-                    # 새 후보만 필터
-                    new_candidates = [
+                    filtered_candidates = [
                         c for c in crop_candidates
-                        if c not in tried and c != old_name
+                        if c not in forbidden and c not in tried and c != old_name
                     ]
+                    skipped = [c for c in crop_candidates if c in forbidden]
+                    if skipped:
+                        print(f"[충돌 제외] {old_name!r}: {skipped} → 겹치는 박스의 다른 플레이어 이름")
+
+                    print(f"[크롭 재질의] {old_name!r} → 후보: {crop_candidates} (유효: {filtered_candidates})")
                     tried.update(crop_candidates)
 
                     # 하이픈 변형도 자동으로 추가
-                    for c in list(new_candidates):
+                    for c in list(filtered_candidates):
                         for hv in _hyphen_variants(c):
-                            if hv not in tried:
-                                new_candidates.append(hv)
+                            if hv not in tried and hv not in forbidden:
+                                filtered_candidates.append(hv)
                                 tried.add(hv)
 
-                    if not new_candidates:
-                        print(f"[크롭 재질의] {old_name!r}: 새 후보 없음")
+                    if not filtered_candidates:
+                        print(f"[크롭 재질의] {old_name!r}: 유효 후보 없음")
                         continue
 
                     resolved = None
-                    for candidate in new_candidates:
+                    for candidate in filtered_candidates:
                         new_data = await self.get_user_data(session, candidate)
                         if new_data["tier"] is not None:
                             new_data["nickname"] = candidate
@@ -817,7 +782,6 @@ class LobbyScan(commands.Cog):
 
         # ════════════════════════════════════════════
         # 2단계: 전체 이미지 Gemini 재질의 (폴백)
-        #   box가 없거나 크롭 후에도 남은 실패자 대상
         # ════════════════════════════════════════════
         tried_candidates: dict[str, set[str]] = {}
 
@@ -849,10 +813,17 @@ class LobbyScan(commands.Cog):
                     gemini_names = corrections.get(old_name, [old_name])
                     tried        = tried_candidates.setdefault(old_name, set())
 
+                    # ★ 전체이미지 재질의에도 박스 충돌 검사 적용
+                    forbidden = _build_forbidden_names(old_name, box, all_ocr) if box else set()
+
                     new_candidates = [
                         gn for gn in gemini_names
-                        if gn != old_name and gn not in tried
+                        if gn != old_name and gn not in tried and gn not in forbidden
                     ]
+                    skipped = [gn for gn in gemini_names if gn in forbidden]
+                    if skipped:
+                        print(f"[충돌 제외] {old_name!r} 전체이미지: {skipped} → 겹치는 박스의 다른 플레이어 이름")
+
                     if not new_candidates:
                         print(f"[전체이미지 {recheck_round}] {old_name!r}: 새 후보 없음, 스킵")
                         continue
@@ -885,7 +856,7 @@ class LobbyScan(commands.Cog):
                 print(f"[조기 종료] 라운드 {recheck_round}: 모든 실패 닉네임에 새 후보 없음")
                 break
 
-        # ── 최종 임베드 (실패 필드 문구 정리) ──
+        # ── 최종 임베드 ──
         final_embed, ok_count, fail_names = build_embed(team_results)
         for i, field in enumerate(final_embed.fields):
             if field.name.startswith("𒄬 조회 실패 — 재시도"):

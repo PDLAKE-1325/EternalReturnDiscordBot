@@ -2,3 +2,9 @@
 https://developer.eternalreturn.io/static/media/OpenAPI_KR_20251118.html#_%EC%86%8C%EA%B0%9C
 
 프로덕션 키 발급 후 1초 유예 제거
+
+- 단축 다 넣기
+- ㅇ매치 등수 가독성좀
+- ㅇㅊㄱㄱ, ㅇㅈㅈ 개선 (가독성, 정보)
+- ㅇ도움 최신화
+- 여러 팀 찾는 곳에서 본인 팀 강조
