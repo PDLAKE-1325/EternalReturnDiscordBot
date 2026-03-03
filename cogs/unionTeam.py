@@ -8,6 +8,7 @@ from datetime import datetime
 from config import ER_KEY
 from db import SessionLocal
 from models import User
+from data import CURRENT_SEASON, CURRENT_SEASON_NUM
 
 ER_BASE = "https://open-api.bser.io/v1"
 
@@ -238,9 +239,8 @@ class UnionTeamCog(commands.Cog):
                 return await loading_msg.edit(content="❌ 시즌 정보를 불러올 수 없습니다.")
             
             # 현재 시즌 찾기 (seasonId가 가장 큰 것)
-            current_season = max(seasons, key=lambda x: x.get("seasonId", 0))
-            current_season_id = current_season.get("seasonId")
-            current_season_num = current_season.get("season", 1)
+            current_season_id = CURRENT_SEASON_NUM
+            current_season_num = CURRENT_SEASON
             
             # 해당 시즌의 유니온 팀 조회
             teams_data = await self.fetch_union_teams(user_api_id, current_season_id)
