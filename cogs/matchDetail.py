@@ -170,7 +170,7 @@ class MatchDetailCog(commands.Cog):
             team_embeds = self.create_team_embed(game_data)
             
             # 모든 임베드를 하나로 합치기 (max 10)
-            all_embeds = [main_embed] + team_embeds
+            all_embeds = [main_embed, team_embeds]
             
             await loading_msg.edit(content=None, embeds=all_embeds)
             
