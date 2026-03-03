@@ -226,44 +226,7 @@ class UnionTeamCog(commands.Cog):
                 embed.add_field(name="**팀 정보**", value="\n".join(lines), inline=False)
         else:
             embed.add_field(name="**팀 정보**", value="유니온 팀 없음 (탈퇴/미가입)", inline=False)
-
-        # ── 대전 기록 ──
-        if is_cur:
-            if games:
-                recent = sorted(games, key=lambda g: g.get("startDtm", ""), reverse=True)[:10]
-                total  = len(recent)
-                wins   = sum(1 for g in recent if g.get("victory", 0))
-
-                avg_rank = sum(g.get("gameRank", 0) for g in recent) / total
-                avg_kill = sum(g.get("playerKill", 0) for g in recent) / total
-                avg_dmg  = sum(g.get("damageToPlayer", 0) for g in recent) / total
-
-                embed.add_field(
-                    name=f"📊 최근 {total}경기 요약",
-                    value=(
-                        f"**{wins}승 {total-wins}패** (승률 **{wins/total*100:.0f}%**)\n"
-                        f"평균 순위 **{avg_rank:.1f}위** | "
-                        f"평균 킬 **{avg_kill:.1f}** | "
-                        f"평균 딜 **{avg_dmg:,.0f}**"
-                    ),
-                    inline=False,
-                )
-
-                lines = []
-                for g in recent:
-                    rank  = g.get("gameRank", 0)
-                    medal = RANK_MEDAL.get(rank, f"{rank}위")
-                    win   = " ✅" if g.get("victory", 0) else ""
-                    char  = Character_Names.get(g.get("characterNum", 0), "?")
-                    wpn   = Weapon_Types.get(g.get("bestWeapon", 0), "?")
-                    k, a, d = g.get("playerKill",0), g.get("playerAssistant",0), g.get("playerDeaths",0)
-                    dmg   = g.get("damageToPlayer", 0)
-                    lines.append(f"{medal}{win} {char}({wpn}) K/A/D `{k}/{a}/{d}` 딜 `{dmg:,}`")
-
-                embed.add_field(name="**최근 대전 기록**", value="\n".join(lines), inline=False) # 🗒️
-            else:
-                embed.add_field(name="**최근 대전 기록**", value="기록 없음", inline=False)
-
+            
         embed.set_footer(text="이리와 봇 · 유니온 팀 정보")
         return embed
 
