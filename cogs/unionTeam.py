@@ -154,8 +154,8 @@ class UnionTeamCog(commands.Cog):
         created_time = team_data.get("cdt", 0)
         updated_time = team_data.get("udt", 0)
         if created_time and updated_time:
-            created = datetime.fromtimestamp(created_time).strftime("%Y.%m.%d")
-            updated = datetime.fromtimestamp(updated_time).strftime("%Y.%m.%d %H:%M")
+            created = datetime.fromtimestamp(created_time / 1000).strftime("%Y.%m.%d")
+            updated = datetime.fromtimestamp(updated_time / 1000).strftime("%Y.%m.%d %H:%M")
             embed.add_field(
                 name="팀 정보",
                 value=f"생성: {created} | 업데이트: {updated}",
