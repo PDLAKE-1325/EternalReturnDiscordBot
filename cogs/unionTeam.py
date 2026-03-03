@@ -2,18 +2,15 @@
 import discord
 from discord.ext import commands
 import aiohttp
-import asyncio
 from typing import Optional, List, Dict
 from datetime import datetime
 
 from config import ER_KEY
 from db import SessionLocal
 from models import User
-from data import Character_Names, Weapon_Types, CURRENT_SEASON, CURRENT_SEASON_NUM
+from data import Character_Names, Weapon_Types, CURRENT_SEASON_NUM
 
 ER_BASE    = "https://open-api.bser.io/v1"
-ER_BASE_V2 = "https://open-api.bser.io/v2"
-
 UNION_MATCHING_MODE = 8
 
 # 시즌 ID → 한글 표기
@@ -123,7 +120,6 @@ class UnionTeamCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot     = bot
         self.api_key = ER_KEY
-        self._seasons_cache: Optional[List[Dict]] = None
 
     # ---- DB ----
 
@@ -153,13 +149,7 @@ class UnionTeamCog(commands.Cog):
         data = await self._get(f"{ER_BASE}/user/nickname", query=nickname)
         return data["user"]["userId"] if data and data.get("user") else None
 
-    async def fetch_seasons(self) -> List[Dict]:
-        if self._seasons_cache:
-            return self._seasons_cache
-        data = await self._get(f"{ER_BASE_V2}/data/Season")
-        if data and data.get("data"):
-            self._seasons_cache = data["data"]
-        return self._seasons_cache or []
+
 
     async def fetch_union_teams(self, user_id: str, season_id: int) -> List[Dict]:
         data = await self._get(f"{ER_BASE}/unionTeam/uid/{user_id}/{season_id}")
@@ -173,31 +163,22 @@ class UnionTeamCog(commands.Cog):
 
     async def build_season_list(self, user_id: str, union_games: List[Dict]) -> List[Dict]:
         """
-        union_games에 등장하는 seasonId를 기준으로 시즌 목록 구성.
-        각 시즌별로 unionTeam API를 호출해 팀 데이터를 붙인다.
+        유니온은 시즌 6(ID 29)부터 도입. 시즌만 해당(프리시즌 제외).
+        CURRENT_SEASON_NUM부터 29까지 2씩 내려가며 조회.
         """
-        all_seasons = await self.fetch_seasons()
-        season_map  = {s["seasonID"]: s for s in all_seasons}
-
-        # 게임 데이터에서 실제 사용된 시즌 ID 추출 (내림차순)
-        used_sids = sorted(
-            {g.get("seasonId") for g in union_games if g.get("seasonId")},
-            reverse=True,
-        )
-
         result: List[Dict] = []
-        for sid in used_sids:
+        sid = CURRENT_SEASON_NUM
+        while sid >= 29:
             games = [g for g in union_games if g.get("seasonId") == sid]
             teams = await self.fetch_union_teams(user_id, sid)
-
-            s_info = season_map.get(sid, {"seasonID": sid})
-            result.append({
-                **s_info,
-                "isCurrent": 1 if sid == CURRENT_SEASON_NUM else 0,
-                "_games":    games,
-                "_teams":    teams,
-            })
-
+            if games or teams:
+                result.append({
+                    "seasonID":  sid,
+                    "isCurrent": 1 if sid == CURRENT_SEASON_NUM else 0,
+                    "_games":    games,
+                    "_teams":    teams or [],
+                })
+            sid -= 2
         return result
 
     # ---- 임베드 빌더 ----
