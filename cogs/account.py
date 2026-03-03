@@ -19,7 +19,7 @@ class ERAccountCog(commands.Cog):
         user_id = str(ctx.author.id)
         session = SessionLocal()
 
-        if not nickname:
+        if not nickname or not nickname.strip():
             return await ctx.reply(embed=discord.Embed(
                 title="❌ 오류",
                 description="`ㅇ등록 [닉네임]` 형식으로 닉네임을 입력해주세요.",

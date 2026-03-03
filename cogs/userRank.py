@@ -734,7 +734,7 @@ class UserRankCog(commands.Cog):
             if not nickname:
                 return await ctx.reply(embed=discord.Embed(
                     title="❌ 오류",
-                    description="`ㅇ등록 [닉네임]`으로 먼저 등록하거나\n`ㅇ랭크 [닉네임]` 닉네임을 입력해주세요.",
+                    description="`ㅇ등록 [닉네임]` 으로 먼저 등록하거나\n`ㅇ랭크 [닉네임]` 닉네임을 입력해주세요.",
                     color=0xFF6B6B,
                 ))
         

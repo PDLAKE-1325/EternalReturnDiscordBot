@@ -69,7 +69,7 @@ class MessageRouter(commands.Cog):
     # ──────────────────────────────────────────────────────
     @commands.command(name="봇채널설정")
     @commands.has_permissions(administrator=True)
-    async def set_bot_channel(self, ctx: commands.Context, channel: discord.TextChannel):
+    async def set_bot_channel(self, ctx: commands.Context, channel: discord.TextChannel = None):
         if channel.guild.id != ctx.guild.id:
             return await ctx.reply("❌ 해당 서버에 존재하는 채널만 설정할 수 있습니다.")
         
