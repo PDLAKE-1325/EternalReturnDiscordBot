@@ -51,7 +51,7 @@ class UnionTeamCog(commands.Cog):
                 if resp.status != 200:
                     return None
                 data = await resp.json()
-                return data.get("user", {}).get("uid")
+                return data.get("user", {}).get("userId")
 
     async def fetch_union_teams(self, user_id: str, season_id: int) -> Optional[List[Dict]]:
         """유니온 팀 정보 조회"""
