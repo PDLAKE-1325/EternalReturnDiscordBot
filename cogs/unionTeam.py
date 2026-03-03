@@ -17,6 +17,32 @@ ER_BASE_V2 = "https://open-api.bser.io/v2"
 # 유니온 게임 matchingMode
 UNION_MATCHING_MODE = 8
 
+SEASON_NAMES = {
+    1: "EA 시즌 1",    2: "EA 프리시즌 2", 3: "EA 시즌 2",
+    4: "EA 프리시즌 3", 5: "EA 시즌 3",    6: "EA 프리시즌 4",
+    7: "EA 시즌 4",    8: "EA 프리시즌 5", 9: "EA 시즌 5",
+    10: "EA 프리시즌 6", 11: "EA 시즌 6",  12: "EA 프리시즌 7",
+    13: "EA 시즌 7",   14: "EA 프리시즌 8", 15: "EA 시즌 8",
+    16: "EA 프리시즌 9", 17: "EA 시즌 9",  18: "프리시즌 1",
+    19: "시즌 1",      20: "프리시즌 2",   21: "시즌 2",
+    22: "프리시즌 3",   23: "시즌 3",      24: "프리시즌 4",
+    25: "시즌 4",      26: "프리시즌 5",   27: "시즌 5",
+    28: "프리시즌 6",   29: "시즌 6",      30: "프리시즌 7",
+    31: "시즌 7",      32: "프리시즌 8",   33: "시즌 8",
+    34: "프리시즌 9",   35: "시즌 9",      36: "프리시즌 10",
+    37: "시즌 10",
+}
+
+def get_season_name(season_id: int) -> str:
+    if season_id in SEASON_NAMES:
+        return SEASON_NAMES[season_id]
+    if season_id > 37:
+        offset     = season_id - 37
+        season_num = 10 + (offset + 1) // 2
+        return f"프리시즌 {season_num}" if offset % 2 == 1 else f"시즌 {season_num}"
+    return f"시즌 {season_id}"
+
+
 UNION_TIER_MAP = {
     1: ("S",   0xFF6B6B, "<:UnionS:1475215908665299035>"),
     2: ("A",   0xFFA500, "<:UnionA:1475215920313139261>"),
@@ -58,7 +84,7 @@ class UnionSeasonSelectView(discord.ui.View):
         options = []
         for s in self.available_seasons[:25]:
             sid   = s["seasonID"]
-            label = f"시즌 {sid}"
+            label = get_season_name(sid)
             is_current = s.get("isCurrent", 0) == 1
             options.append(discord.SelectOption(
                 label=label,
@@ -149,7 +175,11 @@ class UnionTeamCog(commands.Cog):
 
     async def fetch_union_teams(self, uid: str, season_id: int) -> Optional[List[Dict]]:
         data = await self._get(f"{ER_BASE}/unionTeam/uid/{uid}/{season_id}")
-        return data.get("teams") if data else None
+        if not data:
+            return None
+        teams = data.get("teams")
+        # API가 빈 리스트나 None 반환 시 None으로 통일
+        return teams if teams else None
 
     async def fetch_user_games(self, uid: str) -> List[Dict]:
         """최근 90일 전체 경기 목록"""
@@ -240,7 +270,7 @@ class UnionTeamCog(commands.Cog):
 
     def build_embed(self, season_entry: Dict, nickname: str) -> discord.Embed:
         season_id = season_entry["seasonID"]
-        teams     = season_entry.get("teams") or []
+        teams     = season_entry.get("_teams") or []
         games     = season_entry.get("_games") or []
         is_cur    = season_entry.get("isCurrent", 0) == 1
 
@@ -251,7 +281,7 @@ class UnionTeamCog(commands.Cog):
 
         embed = discord.Embed(
             title=f"🤝 {nickname}의 유니온 정보",
-            description=f"**시즌 {season_id}** {'`현재 시즌`' if is_cur else ''}",
+            description=f"**{get_season_name(season_id)}** {'`현재 시즌`' if is_cur else ''}",
             color=tier_color,
             timestamp=datetime.now(),
         )
@@ -366,13 +396,12 @@ class UnionTeamCog(commands.Cog):
     #  커맨드
     # ---------------------------------------------------------------- #
 
-    @commands.command(name="유니온", aliases=["ㅇㄴㅇ"])
+    @commands.command(name="유니온", aliases=["ㅇㄴㅇㄴ", "union"])
     async def union_team_info(self, ctx: commands.Context, *, nickname: str = None):
         """유니온 팀 정보 + 대전 기록 조회"""
         author_id = str(ctx.author.id)
 
-        used_command = ctx.invoked_with
-        if not nickname and used_command != "ㅇㄴㅇ":
+        if not nickname:
             nickname = self.get_active_nickname(author_id)
             if not nickname:
                 return await ctx.reply(embed=discord.Embed(
