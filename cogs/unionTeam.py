@@ -39,15 +39,6 @@ def get_season_name(season_id: int) -> str:
         return f"프리시즌 {num}" if offset % 2 == 1 else f"시즌 {num}"
     return f"시즌 {season_id}"
 
-
-UNION_TIER_MAP: Dict[int, tuple] = {
-    1: ("S", 0xFF6B6B, "<:UnionS:1475215908665299035>"),
-    2: ("A", 0xFFA500, "<:UnionA:1475215920313139261>"),
-    3: ("B", 0x5865F2, "<:UnionB:1475215913778413609>"),
-    4: ("C", 0x43B581, "<:UnionC:1475215912083652760>"),
-    5: ("D", 0x7289DA, "<:UnionD:1475215904789762169>"),
-}
-
 RANK_MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 WIN_TIER_KEYS = [
@@ -183,25 +174,19 @@ class UnionTeamCog(commands.Cog):
 
     # ---- 임베드 빌더 ----
 
-    def _tier_info(self, tier_num: int) -> tuple:
-        return UNION_TIER_MAP.get(tier_num, ("?", 0x808080, "❓"))
-
     def build_embed(self, season_entry: Dict, nickname: str) -> discord.Embed:
         season_id = season_entry["seasonID"]
         teams     = season_entry.get("_teams") or []
         games     = season_entry.get("_games") or []
         is_cur    = season_entry.get("isCurrent", 0) == 1
 
-        primary   = teams[0] if teams else {}
-        _, color, _ = self._tier_info(primary.get("ti", 0))
-
         embed = discord.Embed(
-            title=f"🤝 {nickname}의 유니온 정보",
+            title=f"{nickname}님의의 유니온 정보",
             description=(
                 f"**{get_season_name(season_id)}**"
                 + (" `현재 시즌`" if is_cur else "")
             ),
-            color=color,
+            color=0x808080,
             timestamp=datetime.now(),
         )
 
@@ -209,8 +194,8 @@ class UnionTeamCog(commands.Cog):
         if teams:
             for team in teams:
                 t_name = team.get("tnm", "Unknown")
-                tn, _, te = self._tier_info(team.get("ti", 0))
-                hn, _, _  = self._tier_info(team.get("ssti", 0))
+                tier = team.get("ti", "")
+                top_tier = team.get("ssti", "")
 
                 total_wins = sum(team.get(k, 0) for _, k in WIN_TIER_KEYS)
 
@@ -222,11 +207,11 @@ class UnionTeamCog(commands.Cog):
                 wins_row = " · ".join(wins_parts) if wins_parts else "기록 없음"
 
                 lines = [
-                    f"{te} **{t_name}**",
-                    f"현재 티어: **{tn}** | 최고 티어: **{hn}**",
-                    f"티켓 — S: `{team.get('stt',0)}` "
-                    f"SS: `{team.get('sstt',0)}` "
-                    f"SSS: `{team.get('ssstt',0)}`",
+                    f"팀명 : **{t_name}**",
+                    f"현재 티어: **{tier}** | 최고 티어: **{top_tier}**",
+                    # f"티켓 — S: `{team.get('stt',0)}` "
+                    # f"SS: `{team.get('sstt',0)}` "
+                    # f"SSS: `{team.get('ssstt',0)}`",
                     f"총 승리: **{total_wins}승**",
                     wins_row,
                 ]
@@ -234,49 +219,50 @@ class UnionTeamCog(commands.Cog):
                 cdt, udt = team.get("cdt", 0), team.get("udt", 0)
                 if cdt and udt:
                     lines.append(
-                        f"생성: {datetime.fromtimestamp(cdt/1000):%Y.%m.%d} | "
-                        f"업데이트: {datetime.fromtimestamp(udt/1000):%Y.%m.%d %H:%M}"
+                        f"팀 생성: {datetime.fromtimestamp(cdt/1000):%Y.%m.%d} | "
+                        f"-# 업데이트: {datetime.fromtimestamp(udt/1000):%Y.%m.%d %H:%M}"
                     )
 
-                embed.add_field(name="🏅 팀 정보", value="\n".join(lines), inline=False)
+                embed.add_field(name="**팀 정보**", value="\n".join(lines), inline=False)
         else:
-            embed.add_field(name="🏅 팀 정보", value="유니온 팀 없음 (탈퇴/미가입)", inline=False)
+            embed.add_field(name="**팀 정보**", value="유니온 팀 없음 (탈퇴/미가입)", inline=False)
 
         # ── 대전 기록 ──
-        if games:
-            recent = sorted(games, key=lambda g: g.get("startDtm", ""), reverse=True)[:10]
-            total  = len(recent)
-            wins   = sum(1 for g in recent if g.get("victory", 0))
+        if is_cur:
+            if games:
+                recent = sorted(games, key=lambda g: g.get("startDtm", ""), reverse=True)[:10]
+                total  = len(recent)
+                wins   = sum(1 for g in recent if g.get("victory", 0))
 
-            avg_rank = sum(g.get("gameRank", 0) for g in recent) / total
-            avg_kill = sum(g.get("playerKill", 0) for g in recent) / total
-            avg_dmg  = sum(g.get("damageToPlayer", 0) for g in recent) / total
+                avg_rank = sum(g.get("gameRank", 0) for g in recent) / total
+                avg_kill = sum(g.get("playerKill", 0) for g in recent) / total
+                avg_dmg  = sum(g.get("damageToPlayer", 0) for g in recent) / total
 
-            embed.add_field(
-                name=f"📊 최근 {total}경기 요약",
-                value=(
-                    f"**{wins}승 {total-wins}패** (승률 **{wins/total*100:.0f}%**)\n"
-                    f"평균 순위 **{avg_rank:.1f}위** | "
-                    f"평균 킬 **{avg_kill:.1f}** | "
-                    f"평균 딜 **{avg_dmg:,.0f}**"
-                ),
-                inline=False,
-            )
+                embed.add_field(
+                    name=f"📊 최근 {total}경기 요약",
+                    value=(
+                        f"**{wins}승 {total-wins}패** (승률 **{wins/total*100:.0f}%**)\n"
+                        f"평균 순위 **{avg_rank:.1f}위** | "
+                        f"평균 킬 **{avg_kill:.1f}** | "
+                        f"평균 딜 **{avg_dmg:,.0f}**"
+                    ),
+                    inline=False,
+                )
 
-            lines = []
-            for g in recent:
-                rank  = g.get("gameRank", 0)
-                medal = RANK_MEDAL.get(rank, f"{rank}위")
-                win   = " ✅" if g.get("victory", 0) else ""
-                char  = Character_Names.get(g.get("characterNum", 0), "?")
-                wpn   = Weapon_Types.get(g.get("bestWeapon", 0), "?")
-                k, a, d = g.get("playerKill",0), g.get("playerAssistant",0), g.get("playerDeaths",0)
-                dmg   = g.get("damageToPlayer", 0)
-                lines.append(f"{medal}{win} {char}({wpn}) K/A/D `{k}/{a}/{d}` 딜 `{dmg:,}`")
+                lines = []
+                for g in recent:
+                    rank  = g.get("gameRank", 0)
+                    medal = RANK_MEDAL.get(rank, f"{rank}위")
+                    win   = " ✅" if g.get("victory", 0) else ""
+                    char  = Character_Names.get(g.get("characterNum", 0), "?")
+                    wpn   = Weapon_Types.get(g.get("bestWeapon", 0), "?")
+                    k, a, d = g.get("playerKill",0), g.get("playerAssistant",0), g.get("playerDeaths",0)
+                    dmg   = g.get("damageToPlayer", 0)
+                    lines.append(f"{medal}{win} {char}({wpn}) K/A/D `{k}/{a}/{d}` 딜 `{dmg:,}`")
 
-            embed.add_field(name="🗒️ 경기 목록", value="\n".join(lines), inline=False)
-        else:
-            embed.add_field(name="🗒️ 대전 기록", value="이 시즌 유니온 경기 없음", inline=False)
+                embed.add_field(name="**최근 대전 기록**", value="\n".join(lines), inline=False) # 🗒️
+            else:
+                embed.add_field(name="**최근 대전 기록**", value="기록 없음", inline=False)
 
         embed.set_footer(text="이리와 봇 · 유니온 팀 정보")
         return embed
