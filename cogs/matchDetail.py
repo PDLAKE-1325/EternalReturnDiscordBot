@@ -86,7 +86,7 @@ class MatchDetailCog(commands.Cog):
             # 각 플레이어 정보
             for player in players:
                 char_name = self.get_character_name(player.get("characterNum", 0))
-                nickname = player.get("nickname", "Unknown")
+                nickname = player.get("nickname", "닉네임 비공개")
                 # rank = player.get("gameRank", 0)
                 kill = player.get("playerKill", 0)
                 assist = player.get("playerAssistant", 0)
@@ -97,7 +97,7 @@ class MatchDetailCog(commands.Cog):
                 weapon_name = self.get_weapon_name(best_weapon)
 
                 player_info = (
-                    f"> `{nickname}` | {char_name} · {weapon_name}\n"
+                    f"> **`{nickname}`** | {char_name} · {weapon_name}\n"
                     f"> -# K/D/A: {kill}/{death}/{assist} | 딜량: {damage:,}"
                 )
 
@@ -108,7 +108,7 @@ class MatchDetailCog(commands.Cog):
             embed.add_field(
                 name=f"팀 {team_num:02d}",
                 value=f"최종 순위: **{team_rank}등** | TK: **{team_kills}**\n" + "\n".join(players_info),
-                inline=False
+                inline=True
             )
 
             if team_num % 2 == 0:

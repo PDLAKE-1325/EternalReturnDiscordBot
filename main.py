@@ -33,9 +33,9 @@ async def on_ready():
         activity=discord.Game(name=GAME_STATUS)
     )
     
-# @bot.event
-# async def on_message(message):
-#     pass
+@bot.event
+async def on_message(message):
+    pass
 
 async def load_cogs():
     extensions = [
@@ -46,7 +46,7 @@ async def load_cogs():
         'cogs.scanUsers',
         "cogs.matchDetail",
         "cogs.unionTeam",
-        # "cogs.router",
+        "cogs.router",
     ]
 
     for ext in extensions:
