@@ -120,6 +120,13 @@ class MatchDetailCog(commands.Cog):
     async def match_detail(self, ctx: commands.Context, game_id: int):
         """특정 게임의 상세 정보 조회"""
         
+        if not game_id:
+            return await ctx.reply(embed=discord.Embed(
+                title="❌ 오류",
+                description="`ㅇ매치 [게임ID]` 형식으로 게임 ID를 입력해주세요.",
+                color=0xFF6B6B,
+            ))
+
         loading_msg = await ctx.reply(f"🔍 게임 정보를 불러오는 중... (`{game_id}`)")
         
         try:

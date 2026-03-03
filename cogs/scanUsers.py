@@ -557,7 +557,7 @@ class LobbyScan(commands.Cog):
     @commands.command(name="대기분석", aliases=["ㄷㄱㅂㅅ"])
     async def lobby_scan(self, ctx):
         if not ctx.message.attachments:
-            await ctx.send("이미지 첨부 필요")
+            await ctx.reply("❌ 이미지 첨부 필요")
             return
 
         image_bytes = await ctx.message.attachments[0].read()

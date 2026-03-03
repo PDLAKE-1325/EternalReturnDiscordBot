@@ -8,3 +8,4 @@ https://developer.eternalreturn.io/static/media/OpenAPI_KR_20251118.html#_%EC%86
 - ㅇㅊㄱㄱ, ㅇㅈㅈ 개선 (가독성, 정보)
 - ㅇ도움 최신화
 - 여러 팀 찾는 곳에서 본인 팀 강조
+-라우터 경고메시지 정리

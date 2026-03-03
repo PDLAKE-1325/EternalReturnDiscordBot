@@ -145,29 +145,13 @@ class RecordCog(commands.Cog):
         # 닉네임이 제공되지 않았으면 DB에서 가져오기
         if not nickname:
             nickname = self.get_active_nickname(user_id)
-            
             if not nickname:
-                embed = discord.Embed(
-                    title="⚔️ 이터널 리턴 전적 검색",
-                    description="닉네임을 입력하거나 먼저 등록해주세요!",
-                    color=0x0fb9b1,
-                    timestamp=datetime.now()
-                )
-                embed.add_field(
-                    name="💡 사용법",
-                    value=(
-                        "**직접 검색:**\n"
-                        "`ㅇ전적 [닉네임]` 또는 `ㅇㅈㅈ [닉네임]`\n\n"
-                        "**닉네임 등록 후 자동 검색:**\n"
-                        "`ㅇ등록 [닉네임]` 으로 등록하면\n"
-                        "`ㅇ전적` 만 입력해도 자동으로 검색됩니다!"
-                    ),
-                    inline=False
-                )
-                embed.set_footer(text="이리와 봇 - 이터널 리턴 전적 검색")
-                await ctx.reply(embed=embed)
-                return
-        
+                return await ctx.reply(embed=discord.Embed(
+                    title="❌ 오류",
+                    description="`ㅇ등록 [닉네임]`으로 먼저 등록하거나\n`ㅇ전적 [닉네임]` 닉네임을 입력해주세요.",
+                    color=0xFF6B6B,
+                ))
+            
         # 로딩 메시지
         loading_msg = await ctx.reply(f"🔍 **{nickname}** 님의 전적을 검색 중...")
         
@@ -341,20 +325,12 @@ class RecordCog(commands.Cog):
         # 닉네임이 제공되지 않았으면 DB에서 가져오기
         if not nickname:
             nickname = self.get_active_nickname(user_id)
-            
             if not nickname:
-                embed = discord.Embed(
-                    title="🎮 최근 게임 조회",
-                    description="닉네임을 입력하거나 먼저 등록해주세요!",
-                    color=0x0fb9b1
-                )
-                embed.add_field(
-                    name="사용법",
-                    value="`ㅇ최근게임 [닉네임]` 또는\n`ㅇ등록 [닉네임]` 후 `ㅇ최근게임`",
-                    inline=False
-                )
-                await ctx.reply(embed=embed)
-                return
+                return await ctx.reply(embed=discord.Embed(
+                    title="❌ 오류",
+                    description="`ㅇ등록 [닉네임]`으로 먼저 등록하거나\n`ㅇ최근게임 [닉네임]` 닉네임을 입력해주세요.",
+                    color=0xFF6B6B,
+                ))
         
         loading_msg = await ctx.reply(f"🔍 **{nickname}** 님의 최근 게임을 조회 중...")
         

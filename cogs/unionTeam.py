@@ -234,19 +234,17 @@ class UnionTeamCog(commands.Cog):
 
     # ---- 커맨드 ----
 
-    @commands.command(name="유니온", aliases=["ㅇㄴㅇ", "union"])
+    @commands.command(name="유니온", aliases=["ㅇㄴㅇ"])
     async def union_team_info(self, ctx: commands.Context, *, nickname: str = None):
         """유니온 팀 정보 + 대전 기록 조회"""
         author_id = str(ctx.author.id)
 
         if not nickname:
-            if ctx.invoked_with == "ㅇㄴㅇ":
-                return
             nickname = self.get_active_nickname(author_id)
             if not nickname:
                 return await ctx.reply(embed=discord.Embed(
                     title="❌ 오류",
-                    description="`ㅇ등록 [닉네임]`으로 먼저 등록하거나 닉네임을 입력해주세요.",
+                    description="`ㅇ등록 [닉네임]`으로 먼저 등록하거나\n`ㅇ유니온 [닉네임]` 닉네임을 입력해주세요.",
                     color=0xFF6B6B,
                 ))
 

@@ -6,6 +6,7 @@ from datetime import datetime
 from db import SessionLocal
 from models import GuildConfig
 
+TEST_CHENNEL_ID = 1474687636940787753
 
 class MessageRouter(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -50,6 +51,10 @@ class MessageRouter(commands.Cog):
         if message.guild is None:
             await self.bot.process_commands(message)
             return
+        
+        if message.channel.id == TEST_CHENNEL_ID:
+            await self.bot.process_commands(message)
+            return
 
         bot_channel_id = self._get_valid_bot_channel(message.guild)
 
@@ -67,6 +72,13 @@ class MessageRouter(commands.Cog):
     async def set_bot_channel(self, ctx: commands.Context, channel: discord.TextChannel):
         if channel.guild.id != ctx.guild.id:
             return await ctx.reply("❌ 해당 서버에 존재하는 채널만 설정할 수 있습니다.")
+        
+        if not channel:
+            return await ctx.reply(embed=discord.Embed(
+                title="❌ 오류",
+                description="`ㅇ봇채널설정 #채널명` 형식으로 채널을 입력해주세요.",
+                color=0xFF6B6B,
+            ))
 
         session = SessionLocal()
         try:
@@ -137,7 +149,7 @@ class MessageRouter(commands.Cog):
         if isinstance(error, commands.MissingPermissions):
             await ctx.reply("❌ 관리자 권한이 필요합니다.")
         elif isinstance(error, commands.BadArgument):
-            await ctx.reply("❌ 올바른 채널을 입력해주세요. (예: `ㅇ봇채널설정 #채널명`)")
+            await ctx.reply("❌ 올바른 채널을 입력해주세요. (`ㅇ봇채널설정 #채널명`)")
         else:
             await ctx.reply(f"오류가 발생했습니다: {error}")
 

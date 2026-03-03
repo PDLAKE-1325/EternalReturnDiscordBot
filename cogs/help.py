@@ -29,9 +29,9 @@ PAGES = {
         "emoji": "⚙️",
         "color": 0xEB459E,
         "commands": [
-            ("ㅇ도움", "이 도움말을 표시합니다", ""),
             ("ㅇ봇채널설정 [#채널명]", "봇이 작동할 채널을 설정합니다.\n설정하지 않을 시 모든 채널에서 봇 명령어 사용가능", ""),
             ("ㅇ봇채널제거", "봇이 작동할 채널 설정을 제거합니다.", ""),
+            ("ㅇ도움", "이 도움말을 표시합니다", "> 단축: ㅇㄷㅇ"),
         ],
     },
 }
@@ -156,7 +156,7 @@ class HelpCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.command(name="도움")
+    @commands.command(name="도움", aliases=["ㄷㅇ"])
     async def record_help(self, ctx: commands.Context):
         embed = build_main_embed(self.bot.user)
         view = MainView(self.bot.user, author_id=ctx.author.id)  # 실행자 ID 전달

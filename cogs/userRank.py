@@ -724,27 +724,19 @@ class UserRankCog(commands.Cog):
         return embed, img_path  # ✅ 이미지 경로도 함께 반환
 
     
-    @commands.command(name="랭크", aliases=["ㄹㅋ", "fz", "랭킹", "랭겜"])
+    @commands.command(name="랭크", aliases=["ㄹㅋ"])
     async def show_rank(self, ctx: commands.Context, *, nickname: str = None):
         """이터널 리턴 랭킹 조회"""
         user_id = str(ctx.author.id)
         
         if not nickname:
             nickname = self.get_active_nickname(user_id)
-            
             if not nickname:
-                embed = discord.Embed(
-                    title="🏆 랭킹 조회",
-                    description="닉네임을 입력하거나 먼저 등록해주세요!",
-                    color=0x0fb9b1
-                )
-                embed.add_field(
-                    name="사용법",
-                    value="`!랭크 [닉네임]` 또는\n`!닉네임등록 [닉네임]` 후 `!랭크`",
-                    inline=False
-                )
-                await ctx.send(embed=embed)
-                return
+                return await ctx.reply(embed=discord.Embed(
+                    title="❌ 오류",
+                    description="`ㅇ등록 [닉네임]`으로 먼저 등록하거나\n`ㅇ랭크 [닉네임]` 닉네임을 입력해주세요.",
+                    color=0xFF6B6B,
+                ))
         
         loading_msg = await ctx.send(f"🔍 **{nickname}** 님의 랭킹을 조회 중...")
         
