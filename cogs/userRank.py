@@ -105,7 +105,7 @@ class SeasonSelectView(discord.ui.View):
                     label=season_name,
                     value=str(season_id),
                     description=f"{season['seasonStart'][:10]} ~ {season['seasonEnd'][:10]}",
-                    emoji="🟢" if is_current else "🔴",
+                    emoji="🟢" if is_current else "⚪",
                     default=(season_id == current_season_id)
                 )
             )

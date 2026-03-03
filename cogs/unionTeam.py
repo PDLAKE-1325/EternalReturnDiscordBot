@@ -240,7 +240,7 @@ class UnionTeamCog(commands.Cog):
 
     def build_embed(self, season_entry: Dict, nickname: str) -> discord.Embed:
         season_id = season_entry["seasonID"]
-        teams     = season_entry.get("_teams") or []
+        teams     = season_entry.get("teams") or []
         games     = season_entry.get("_games") or []
         is_cur    = season_entry.get("isCurrent", 0) == 1
 
@@ -366,12 +366,13 @@ class UnionTeamCog(commands.Cog):
     #  커맨드
     # ---------------------------------------------------------------- #
 
-    @commands.command(name="유니온", aliases=["ㅇㄴㅇㄴ", "union"])
+    @commands.command(name="유니온", aliases=["ㅇㄴㅇ"])
     async def union_team_info(self, ctx: commands.Context, *, nickname: str = None):
         """유니온 팀 정보 + 대전 기록 조회"""
         author_id = str(ctx.author.id)
 
-        if not nickname:
+        used_command = ctx.invoked_with
+        if not nickname and used_command != "ㅇㄴㅇ":
             nickname = self.get_active_nickname(author_id)
             if not nickname:
                 return await ctx.reply(embed=discord.Embed(
