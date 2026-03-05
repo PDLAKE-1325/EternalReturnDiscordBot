@@ -175,7 +175,7 @@ class RecordCog(commands.Cog):
             if not games_data or not games_data.get("userGames"):
                 embed = discord.Embed(
                     title="❌ 데이터 없음",
-                    description=f"**{nickname}** 님의 게임 기록을 찾을 수 없습니다.\n-# https://dak.gg/er/players/{nickname}에서 확인해보세요.",
+                    description=f"**{nickname}** 님의 게임 기록을 찾을 수 없습니다.\n-# https://dak.gg/er/players/{nickname} 에서 확인해보세요.",
                     color=0xff0000,
                     timestamp=datetime.now()
                 )
@@ -349,7 +349,7 @@ class RecordCog(commands.Cog):
             if not games_data or not games_data.get("userGames"):
                 embed = discord.Embed(
                     title="❌ 데이터 없음",
-                    description="게임 기록이 없습니다. \n-# https://dak.gg/er/players/{nickname}에서 확인해보세요.",
+                    description=f"게임 기록이 없습니다. \n-# https://dak.gg/er/players/{nickname} 에서 확인해보세요.",
                     color=0xff0000
                 )
                 await loading_msg.edit(content=None, embed=embed)
