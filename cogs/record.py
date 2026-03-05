@@ -469,8 +469,8 @@ class RecordCog(commands.Cog):
             
             # 바로가기 링크
             embed.add_field(
-                name="Dak.gg 리플레이",
-                value=f"https://dak.gg/er/replay/{game['gameId']}",
+                name="",
+                value=f"[Dak.gg 리플레이](https://dak.gg/er/replay/{game['gameId']})",
                 inline=False
             )
 
