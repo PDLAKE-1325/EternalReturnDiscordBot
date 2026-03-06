@@ -48,9 +48,9 @@ class MessageRouter(commands.Cog):
             return
 
         # DM은 제한 없이 처리
-        if message.guild is None:
-            await self.bot.process_commands(message)
-            return
+        # if message.guild is None:
+        #     await self.bot.process_commands(message)
+        #     return
         
         if message.channel.id == TEST_CHENNEL_ID:
             await self.bot.process_commands(message)
