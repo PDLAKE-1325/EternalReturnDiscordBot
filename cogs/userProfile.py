@@ -106,47 +106,39 @@ class ProfileCog(commands.Cog):
             timestamp=datetime.now(),
         )
 
-        # ── 레벨 ──
-        level = user_info.get("level")
-        if level:
-            embed.add_field(name="레벨", value=f"**Lv. {level}**", inline=True)
+        # ── 계정 레벨 (최근 게임의 accountLevel) ──
+        account_level = games[0].get("accountLevel") if games else None
+        if account_level:
+            embed.add_field(name="계정 레벨", value=f"**Lv. {account_level}**", inline=True)
+        else:
+            dakgg_url = f"https://dak.gg/er/players/{discord.utils.escape_markdown(nickname)}"
+            embed.add_field(
+                name="계정 레벨",
+                value=f"[dak.gg에서 확인]({dakgg_url})",
+                inline=True,
+            )
 
-        # ── 플레이타임: stats totalSecondsPlayed 합산 ──
+        # ── 플레이타임: stats season 0 totalSecondsPlayed 합산 ──
         total_seconds = 0
         for stat_entry in stats_list:
             for cs in (stat_entry.get("characterStats") or []):
                 total_seconds += cs.get("totalSecondsPlayed", 0) or 0
 
-        # stats에 없으면 games duration 합산으로 대체
-        if total_seconds == 0 and games:
-            total_seconds = sum(g.get("duration", 0) or 0 for g in games)
-
         embed.add_field(
             name="플레이타임",
-            value=f"**{self.format_playtime(total_seconds)}**",
+            value=f"**{self.format_playtime(total_seconds)}**" if total_seconds else "정보 없음",
             inline=True,
         )
 
-        # ── 공백 칸 (레이아웃 정렬) ──
-        if level:
-            embed.add_field(name="\u200b", value="\u200b", inline=True)
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
 
-        # ── 첫 / 마지막 게임 날짜 ──
+        # ── 마지막 게임 날짜 (games = 최근 90일치, 최신순) ──
         if games:
-            # games는 최신순 → 마지막이 가장 오래된 게임
-            first_dt = self.parse_dtm(games[-1].get("startDtm"))
-            last_dt  = self.parse_dtm(games[0].get("startDtm"))
-
-            if first_dt:
-                embed.add_field(
-                    name="첫 게임",
-                    value=f"**{first_dt:%Y.%m.%d}**",
-                    inline=True,
-                )
+            last_dt = self.parse_dtm(games[0].get("startDtm"))
             if last_dt:
                 embed.add_field(
                     name="마지막 게임",
-                    value=f"**{last_dt:%Y.%m.%d}**",
+                    value=f"**{last_dt:%Y.%m.%d %H:%M}**",
                     inline=True,
                 )
 
@@ -218,11 +210,11 @@ class ProfileCog(commands.Cog):
 
             user_id = str(user_info["userId"])
 
-            # 병렬 요청
-            stats_list, games = await asyncio.gather(
-                self.fetch_user_stats(user_id, 0),   # 0 = 전 시즌
-                self.fetch_user_games(user_id),
-            )
+            # 1 RPS 제한 — 순차 요청
+            await asyncio.sleep(1)
+            stats_list = await self.fetch_user_stats(user_id, 0)  # 0 = 전 시즌
+            await asyncio.sleep(1)
+            games = await self.fetch_user_games(user_id)
 
             embed = self.build_embed(nickname, user_info, stats_list, games)
             await loading.edit(content=None, embed=embed)
