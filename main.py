@@ -46,6 +46,7 @@ async def load_cogs():
         'cogs.scanUsers',
         "cogs.matchDetail",
         "cogs.unionTeam",
+        "cogs.userProfile",
         "cogs.router",
     ]
 
